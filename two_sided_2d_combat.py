@@ -184,7 +184,6 @@ class Commander(object):
         self.mission_objective = mission_objective
         self.ini_strength = self.assessFriendlyStrength()
         self.order_record = []
-        self.enemy_obj_infl_power = 1.0
         self.zone_importance = 1.0
         self.elim_enemy_ft_importance = 1.0
     
@@ -215,12 +214,18 @@ class Commander(object):
                 dist = np.sqrt(x_dist**2 + y_dist**2)
                 payoff = self.zone_importance * (1 / dist)
                 cost = env.zone[a][b].menInZone(env)[self.enemy_id_num]
+                if cost == 0:
+                    cost = 1
                 task.append(Task('CONTROL ZONE', [a, b], payoff, cost))
         # 2. Enemy fireteam elimination
         for a in np.arange(0, len(env.com[self.enemy_id_num].ft)):
-            payoff = self.elim_enemy_ft_importance
-            cost = env.com[self.enemy_id_num].ft[a].countActive()
-            task.append(Task('ELIM FT', a, payoff, cost))
+            if env.com[self.enemy_id_num].ft[a].countActive() > 0:
+                payoff = self.elim_enemy_ft_importance
+                cost = env.com[self.enemy_id_num].ft[a].countActive()
+                if cost == 0:
+                    cost = 1
+                task.append(Task('ELIM FT', a, payoff, cost))
+        self.task = task
         
     def assessFriendlyStrength(self):
         man_value = 1
@@ -253,58 +258,43 @@ class Commander(object):
         return env.com[self.enemy_id_num].assessFriendlyUnitInfl()
     
     def assignOrders(self, env):
+        # Analyse tasks
+        value = []
+        for i in np.arange(0, len(self.task)):
+            value.append(self.task[i].value)
+        total_value = np.sum(value)
+        rel_value = value / total_value
+        cum_value = []
+        for i in np.arange(0, len(rel_value)):
+            cum_value.append(np.nansum(rel_value[0:i+1]))
+        assign_count = [0] * len(rel_value)
         for i in np.arange(0, len(self.ft)):
-            # Always assign an attack order
-            action = 1
-            # Weight potential targets by objective influence raised to a power
-            infl_raised = self.enemy_obj_influence ** self.enemy_obj_infl_power
-            total_weight = np.sum(infl_raised)
-            rel_weight = infl_raised / total_weight
-            cum_weight = []
-            for a in np.arange(0, len(rel_weight)):
-                cum_weight.append(np.nansum(rel_weight[0:a+1]))
-            if cum_weight[-1] == 0:
-                # No enemy fireteam has influence over objective, give no order
-                action = 0
-                target = []
-            else:
-                rand_select = np.random.uniform()
-                found_select = False
-                a = 0
-                while found_select == False:
-                    if rand_select < cum_weight[a]:
-                        found_select = True
-                    else:
-                        a += 1
-                target = [env.com[self.enemy_id_num].ft[a].loc[0], env.com[self.enemy_id_num].ft[a].loc[1]]
-            order = Order(env.t, action, target)
-            self.ft[i].order = order
-            self.order_record.append(order)
+            rand_select = np.random.uniform()
+            found_select = False
+            a = 0
+            while found_select == False:
+                if rand_select < cum_value[a]:
+                    found_select = True
+                else:
+                    a += 1
+            assign_count[a] += 1
+        for i in np.arange(0, len(self.ft)):
+            for j in np.arange(0, len(assign_count)):
+                if assign_count[j] > 0:
+                    if self.task[j].type == 'CONTROL ZONE':
+                        [a, b] = self.task[j].target
+                        order = Order(env.t, self.id_num, i, 1, [env.zone[a][b].x_ctr, env.zone[a][b].y_ctr])
+                        self.ft[i].order = order
+                    elif self.task[j].type == 'ELIM FT':
+                        order = Order(env.t, self.id_num, i, 1, env.com[self.enemy_id_num].ft[self.task[j].target].loc)
+                        self.ft[i].order = order
+                    self.order_record.append(order)
     
     def countActive(self):
         active = 0
         for i in np.arange(0, len(self.ft)):
             active += self.ft[i].countActive()
         return active
-    
-#    def genRandomOrder(self, env):
-#        action = np.random.randint(0, 4)
-#        if action == 0:
-#            order = Order(env.t, action)
-#        elif action == 1:
-#            if np.random.uniform() < 0.5:
-#                target = [0, 0]
-#            else:
-#                enemy_locs = env.com[self.enemy_id_num].getLocs()
-#                enemy_target = np.random.randint(0, len(enemy_locs[0]))
-#                target = [enemy_locs[0][enemy_target], enemy_locs[1][enemy_target]]
-#            order = Order(env.t, action, target)
-#        elif action == 2:
-#            order = Order(env.t, action)
-#        elif action == 3:
-#            target = [-100]
-#            order = Order(env.t, action, target)
-#        return order
 
 class Fireteam(object):
     def __init__(self, loc, com_id_num, com_enemy_id_num, ft_id_num):
@@ -317,7 +307,7 @@ class Fireteam(object):
         self.id_num = ft_id_num
         self.com_id_num = com_id_num
         self.com_enemy_id_num = com_enemy_id_num
-        self.order = Order(0, 0)
+        self.order = Order(0, com_id_num, ft_id_num, 0)
         self.speed = 5
             
     def getLocs(self):
@@ -402,8 +392,10 @@ class Order(object):
     2 : DEFEND
     3 : RETREAT
     """
-    def __init__(self, t, action, target=[], priority=0):
+    def __init__(self, t, commander_id, fireteam_id, action, target=[], priority=0):
         self.t = t
+        self.commander_id = commander_id
+        self.fireteam_id = fireteam_id
         self.action = action
         self.target = target
 
@@ -551,14 +543,126 @@ def outputLogs(env):
         for j in np.arange(0, len(order_record[i])):
             commander_i_order_j = order_record[i][j]
             t = commander_i_order_j.t
+            commander_id = commander_i_order_j.commander_id
+            fireteam_id = commander_i_order_j.fireteam_id
             action = commander_i_order_j.action
-            target = commander_i_order_j.target
-            output_row = [t, action, target]
+            target_x = commander_i_order_j.target[0]
+            target_y = commander_i_order_j.target[1]
+            output_row = [t, commander_id, fireteam_id, action, target_x, target_y]
             order_log.append(output_row)
     with open('order_log.txt', 'w') as output_file:
         wr = csv.writer(output_file)
         for a in order_log:
             wr.writerow(a)
+
+def buildTimeline(env):
+    with open('order_log.txt', 'r') as input_file:
+        r = csv.reader(input_file, delimiter=',')
+        order_t = []
+        order_commander_id = []
+        order_fireteam_id = []
+        order_action = []
+        order_target_x = []
+        order_target_y = []
+        for row in r:
+            if row:
+                order_t.append(int(row[0]))
+                order_commander_id.append(int(row[1]))
+                order_fireteam_id.append(int(row[2]))
+                order_action.append(int(row[3]))
+                order_target_x.append(float(row[4]))
+                order_target_y.append(float(row[5]))
+    with open('move_log.txt', 'r') as input_file:
+        r = csv.reader(input_file, delimiter=',')
+        move_t = []
+        move_commander_id = []
+        move_fireteam_id = []
+        move_soldier_id = []
+        move_dest_x = []
+        move_dest_y = []
+        move_ini_x = []
+        move_ini_y = []
+        move_x_change = []
+        move_y_change = []
+        move_new_x = []
+        move_new_y = []
+        for row in r:
+            if row:
+                move_t.append(int(row[0]))
+                move_commander_id.append(int(row[1]))
+                move_fireteam_id.append(int(row[2]))
+                move_soldier_id.append(int(row[3]))
+                move_dest_x.append(float(row[4]))
+                move_dest_y.append(float(row[5]))
+                move_ini_x.append(float(row[6]))
+                move_ini_y.append(float(row[7]))
+                move_x_change.append(float(row[8]))
+                move_y_change.append(float(row[9]))
+                move_new_x.append(float(row[10]))
+                move_new_y.append(float(row[11]))
+    with open('fire_log.txt', 'r') as input_file:
+        r = csv.reader(input_file, delimiter=',')
+        fire_t = []
+        fire_source_commander_id = []
+        fire_source_fireteam_id = []
+        fire_source_soldier_id = []
+        fire_target_commander_id = []
+        fire_target_fireteam_id = []
+        fire_target_soldier_id = []
+        fire_source_x = []
+        fire_source_y = []
+        fire_target_x = []
+        fire_target_y = []
+        fire_result = []
+        for row in r:
+            if row:
+                fire_t.append(int(row[0]))
+                fire_source_commander_id.append(int(row[1]))
+                fire_source_fireteam_id.append(int(row[2]))
+                fire_source_soldier_id.append(int(row[3]))
+                fire_target_commander_id.append(int(row[4]))
+                fire_target_fireteam_id.append(int(row[5]))
+                fire_target_soldier_id.append(int(row[6]))
+                fire_source_x.append(float(row[7]))
+                fire_source_y.append(float(row[8]))
+                fire_target_x.append(float(row[9]))
+                fire_target_y.append(float(row[10]))
+                fire_result.append(row[11])
+    for i in np.arange(0, 2):
+        for j in np.arange(0, len(env.com[i].ft)):
+            valid_order_commander_id_I = np.where(order_commander_id == i)
+            valid_order_fireteam_id_I = np.where(order_fireteam_id == j)
+            all_order_I = np.unique(np.append(valid_order_commander_id_I, valid_order_fireteam_id_I))
+            valid_order_I = []
+            for a in all_order_I:
+                if np.any(valid_order_commander_id_I == a):
+                    if np.any(valid_order_fireteam_id_I == a):
+                        valid_order_I.append(a)
+            valid_move_commander_id_I = np.where(move_commander_id == i)
+            valid_move_fireteam_id_I = np.where(move_fireteam_id == j)
+            all_move_I = np.unique(np.append(valid_move_commander_id_I, valid_move_fireteam_id_I))
+            valid_move_I = []
+            for a in all_move_I:
+                if np.any(valid_move_commander_id_I == a):
+                    if np.any(valid_move_fireteam_id_I == a):
+                        valid_move_I.append(a)
+            valid_fire_source_commander_id_I = np.where(fire_source_commander_id == i)
+            valid_fire_source_fireteam_id_I = np.where(fire_source_fireteam_id == j)
+            all_fire_source_I = np.unique(np.append(valid_fire_source_commander_id_I, valid_fire_source_fireteam_id_I))
+            valid_fire_source_I = []
+            for a in all_fire_source_I:
+                if np.any(valid_fire_source_commander_id_I == a):
+                    if np.any(valid_fire_source_fireteam_id_I == a):
+                        valid_fire_source_I.append(a)
+            valid_fire_target_commander_id_I = np.where(fire_target_commander_id == i)
+            valid_fire_target_fireteam_id_I = np.where(fire_target_fireteam_id == j)
+            all_fire_target_I = np.unique(np.append(valid_fire_target_commander_id_I, valid_fire_target_fireteam_id_I))
+            valid_fire_target_I = []
+            for a in all_fire_target_I:
+                if np.any(valid_fire_target_commander_id_I == a):
+                    if np.any(valid_fire_target_fireteam_id_I == a):
+                        valid_fire_target_I.append(a)
+            # Have now identified all orders, move events, and fire events that apply to the fireteam
 
 def fireActivity():
     with open('fire_log.txt', 'r') as input_file:
@@ -696,5 +800,6 @@ print(env.score[1][-1])
 outputLogs(env)
 
 # Perform post analysis
+buildTimeline(env)
 fireActivity()
 friendlyCasualties(0)
