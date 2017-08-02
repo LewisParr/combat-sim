@@ -24,15 +24,16 @@ class InfantryAsset(object):
                 for P in C.platoon:
                     for S in P.section:
                         for M in S.unit.member:
-                            cell_x = int(np.floor(M.location[0] / env.visibility_cell_width))
-                            cell_y = int(np.floor(M.location[1] / env.visibility_cell_width))
-                            raw_detection_prob = v_map[cell_x][cell_y]
-                            # Random sample test for detection
-                            random_sample = np.random.uniform()
-                            if random_sample < raw_detection_prob:
-                                # Asset is detected, create detection event
-                                # ADD UNCERTAINTY HERE?
-                                detected_location.append([M.location[0], M.location[1]])
+                            if M.status != 2:
+                                cell_x = int(np.floor(M.location[0] / env.visibility_cell_width))
+                                cell_y = int(np.floor(M.location[1] / env.visibility_cell_width))
+                                raw_detection_prob = v_map[cell_x][cell_y]
+                                # Random sample test for detection
+                                random_sample = np.random.uniform()
+                                if random_sample < raw_detection_prob:
+                                    # Asset is detected, create detection event
+                                    # ADD UNCERTAINTY HERE?
+                                    detected_location.append([M.location[0], M.location[1]])
         self.detected_location = detected_location
         return detected_location
     
