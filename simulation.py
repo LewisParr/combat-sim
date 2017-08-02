@@ -16,7 +16,7 @@ def timestep():
         F.detect(env, force[F.enemy_forceID])
     # Assess objective states
     for F in force:
-        F.updateObjectiveStatus()
+        F.updateObjectiveStatus(env)
     # Give orders
     for F in force:
         F.giveOrders(env)
@@ -216,3 +216,10 @@ for F in force:
 plt.xlabel('Timestep')
 plt.ylabel('Visible Area')
 plt.title('Fraction of Environment Visible')
+# Number of detected enemy assets
+plt.figure()
+for F in force:
+    plt.plot(F.detected_enemy_assets)
+plt.xlabel('Timestep')
+plt.ylabel('Enemy Assets')
+plt.title('Number of Detected Enemy Assets')
