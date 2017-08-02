@@ -34,6 +34,7 @@ class TopLevelCommander(Commander):
             self.enemy_forceID = 0
         self.active_assets = []
         self.visible_area = []
+        self.detected_enemy_assets = []
     
     def assignObjective(self, objective):
         self.objective = objective
@@ -108,9 +109,58 @@ class TopLevelCommander(Commander):
         for n in self.obj_graph.successors_iter(self.objective):
             self.company[self.obj_graph.node[n]['Owner']].assignAssetObjectives(self.obj_graph, n)
     
-    def updateObjectiveStatus(self):
+    def updateObjectiveStatus(self, env):
         for n in self.obj_graph.nodes_iter():
-            print(nx.shortest_path_length(self.obj_graph, source=self.objective, target=n))
+            # Determine objective priority
+            priority_decay = 0.5                                                # TO BE LEARNT BY COMMANDER
+            self.obj_graph.node[n]['Priority'] = 1 * (priority_decay**nx.shortest_path_length(self.obj_graph, source=self.objective, target=n))
+            # Measure friendly influence over each objective (spatial proximity & visibility)
+            spatial_influence = 0
+            for C in self.company:
+                for P in C.platoon:
+                    for S in P.section:
+                        for M in S.unit.member:
+                            x_dist = M.location[0] - ((n.NW[0] + n.SE[0]) / 2)
+                            y_dist = M.location[1] - ((n.NW[1] + n.SE[1]) / 2)
+                            dist = np.sqrt(x_dist**2 + y_dist**2)
+                            spatial_influence += 1 / dist
+            v_maps = []
+            for C in self.company:
+                for P in C.platoon:
+                    for S in P.section:
+                        for M in S.unit.member:
+                            cell_x = int(np.floor(M.location[0] / env.visibility_cell_width))
+                            cell_y = int(np.floor(M.location[1] / env.visibility_cell_width))
+                            v_maps.append(np.asarray(env.visibility_cell[cell_x][cell_y].v_map))
+            v_map_all = v_maps[0]
+            for i in np.arange(1, len(v_maps)):
+                v_map_all = np.maximum(v_map_all, v_maps[i])
+            visibility_influence = 0
+            for x in np.arange(0, len(v_map_all)):
+                for y in np.arange(0, len(v_map_all)):
+                    x_ctr = env.visibility_cell[x][y].x_ctr
+                    y_ctr = env.visibility_cell[x][y].y_ctr
+                    x_dist = ((n.NW[0] + n.SE[0]) / 2) - x_ctr
+                    y_dist = ((n.NW[1] + n.SE[1]) / 2) - y_ctr
+                    dist = np.sqrt(x_dist**2 + y_dist**2)
+                    if dist == 0:
+                        dist = 1
+                    visibility_influence += v_map_all[x][y] / dist
+            spatial_influence_weight = 1                                        # TO BE LEARNT BY COMMANDER
+            visibility_influence_weight = 1                                     # TO BE LEARNT BY COMMANDER
+            self.obj_graph.node[n]['Friendly Influence'] = (spatial_influence * spatial_influence_weight) + (visibility_influence * visibility_influence_weight)
+            # Measure enemy threat to each objective
+            enemy_threat = 0
+            for l in self.detected_location:
+                x_dist = ((n.NW[0] + n.SE[0]) / 2) - l[0]
+                y_dist = ((n.NW[1] + n.SE[1]) / 2) - l[1]
+                dist = np.sqrt(x_dist**2 + y_dist**2)
+                if dist == 0:
+                    dist = 1
+                enemy_threat += 1 / dist
+            enemy_threat_weight = 1                                             # TO BE LEARNT BY COMMANDER
+            self.obj_graph.node[n]['Enemy Threat'] = enemy_threat * enemy_threat_weight
+            # Determine if objective needs to be taken/requires a stationed unit/can be left unattended
     
     def giveOrders(self, env):
         """
@@ -134,7 +184,20 @@ class TopLevelCommander(Commander):
         detected_location = []
         for C in self.company:
             detected_location.append(C.detect(env, enemy_force))
-        # CONSIDER DETECTED LOCATIONS IN LOGIC
+        unique_detected_location = []
+        for a in np.arange(0, len(detected_location)):
+            for b in np.arange(0, len(detected_location[a])):
+                x = detected_location[a][b][0]
+                y = detected_location[a][b][1]
+                found = False
+                tol = 0.001
+                for c in unique_detected_location:
+                    if np.absolute(c[0] - x) < tol:
+                        if np.absolute(c[1] - y) < tol:
+                            found = True
+                if found == False:
+                    unique_detected_location.append(detected_location[a][b])
+        self.detected_location = unique_detected_location
     
     def createEvents(self, env, enemy_force):
         all_companyID = []
@@ -179,11 +242,16 @@ class TopLevelCommander(Commander):
             v_map_all = np.maximum(v_map_all, v_maps[i])
         return np.sum(v_map_all) / ((env.nX * env.nY) / (env.visibility_cell_width**2)) # Percentage of environment visible (where visibility of a cell can take a fractional value)
     
+    def countDetected(self):
+        return len(self.detected_location)
+    
     def record(self, env):
         # Save the number of active assets
         self.active_assets.append(self.countActive())
         # Save the area of visibly terrain
         self.visible_area.append(self.measureVisibleArea(env))
+        # Save the number of detected enemy assets
+        self.detected_enemy_assets.append(self.countDetected())
            
 class FriendlyCommander(TopLevelCommander):
     """
@@ -338,8 +406,20 @@ class PlatoonCommander(Commander):
         detected_location = []
         for S in self.section:
             detected_location.append(S.detect(env, enemy_force))
-        # CONSIDER DETECTED LOCATIONS IN LOGIC
-        return detected_location
+        unique_detected_location = []
+        for a in np.arange(0, len(detected_location)):
+            for b in np.arange(0, len(detected_location[a])):
+                x = detected_location[a][b][0]
+                y = detected_location[a][b][1]
+                found = False
+                tol = 0.001
+                for c in unique_detected_location:
+                    if np.absolute(c[0] - x) < tol:
+                        if np.absolute(c[1] - y) < tol:
+                            found = True
+                if found == False:
+                    unique_detected_location.append(detected_location[a][b])
+        return unique_detected_location
     
     def createEvents(self, env, enemy_force):
         """
@@ -421,8 +501,20 @@ class CompanyCommander(Commander):
         detected_location = []
         for P in self.platoon:
             detected_location.append(P.detect(env, enemy_force))
-        # CONSIDER DETECTED LOCATIONS IN LOGIC
-        return detected_location
+        unique_detected_location = []
+        for a in np.arange(0, len(detected_location)):
+            for b in np.arange(0, len(detected_location[a])):
+                x = detected_location[a][b][0]
+                y = detected_location[a][b][1]
+                found = False
+                tol = 0.001
+                for c in unique_detected_location:
+                    if np.absolute(c[0] - x) < tol:
+                        if np.absolute(c[1] - y) < tol:
+                            found = True
+                if found == False:
+                    unique_detected_location.append(detected_location[a][b])
+        return unique_detected_location
     
     def createEvents(self, env, enemy_force):
         all_platoonID = []
