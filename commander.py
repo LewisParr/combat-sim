@@ -32,6 +32,8 @@ class TopLevelCommander(Commander):
             self.enemy_forceID = 1
         else:
             self.enemy_forceID = 0
+        self.active_assets = []
+        self.visible_area = []
     
     def assignObjective(self, objective):
         self.objective = objective
@@ -106,12 +108,27 @@ class TopLevelCommander(Commander):
         for n in self.obj_graph.successors_iter(self.objective):
             self.company[self.obj_graph.node[n]['Owner']].assignAssetObjectives(self.obj_graph, n)
     
-    def giveOrders(self):
+    def updateObjectiveStatus(self):
+        for n in self.obj_graph.nodes_iter():
+            print(nx.shortest_path_length(self.obj_graph, source=self.objective, target=n))
+    
+    def giveOrders(self, env):
         """
         ...
         """
-        for C in self.company:
-            C.getOrder(order.MoveTo([200, 200]))
+        for i in np.arange(0, len(self.company)): # For each company...
+            # ...find its assigned objectives
+            objectives = []
+            for n in self.obj_graph.successors_iter(self.objective):
+                if self.obj_graph.node[n]['Owner'] == i:
+                    objectives.append(n)
+            # Select one of these objectives to action
+            chosen_objective = objectives[0]
+            # Translate objective to an order
+            obj_type = chosen_objective.type
+            x_ctr = (chosen_objective.NW[0] + chosen_objective.SE[0]) / 2
+            y_ctr = (chosen_objective.NW[1] + chosen_objective.SE[1]) / 2
+            self.company[i].getOrder(order.MoveTo([x_ctr, y_ctr]), self.obj_graph, chosen_objective, env)
     
     def detect(self, env, enemy_force):
         detected_location = []
@@ -136,10 +153,37 @@ class TopLevelCommander(Commander):
             all_eventData.append(eventData)
         forceID = [self.forceID] * len(all_companyID)
         return [forceID, all_companyID, all_platoonID, all_sectionID, all_manID, all_eventType, all_eventData]
-            
-    def applyEvents(self):
+    
+    def countActive(self):
+        count = 0
         for C in self.company:
-            C.applyEvents()
+            for P in C.platoon:
+                for S in P.section:
+                    for M in S.unit.member:
+                        if M.status == 0:
+                            count += 1
+        return count
+    
+    def measureVisibleArea(self, env):
+        # Collate the areas visible by each asset
+        v_maps = []
+        for C in self.company:
+            for P in C.platoon:
+                for S in P.section:
+                    for M in S.unit.member:
+                        cell_x = int(np.floor(M.location[0] / env.visibility_cell_width))
+                        cell_y = int(np.floor(M.location[1] / env.visibility_cell_width))
+                        v_maps.append(np.asarray(env.visibility_cell[cell_x][cell_y].v_map))
+        v_map_all = v_maps[0]
+        for i in np.arange(1, len(v_maps)):
+            v_map_all = np.maximum(v_map_all, v_maps[i])
+        return np.sum(v_map_all) / ((env.nX * env.nY) / (env.visibility_cell_width**2)) # Percentage of environment visible (where visibility of a cell can take a fractional value)
+    
+    def record(self, env):
+        # Save the number of active assets
+        self.active_assets.append(self.countActive())
+        # Save the area of visibly terrain
+        self.visible_area.append(self.measureVisibleArea(env))
            
 class FriendlyCommander(TopLevelCommander):
     """
@@ -171,14 +215,71 @@ class SectionCommander(Commander):
         self.location = location
         self.unit.setLocation(location)
     
-    def getOrder(self, order):
+    def getOrder(self, Order, env):
         """
         ...
         """
-        self.order = order
+        self.order = Order
+        SA()
+        # Calculate threat of each detected enemy to each friendly member
+        # For now, use visibility as threat measure (0 if outside effective range)
+        enemy_threat = []
+        for a in np.arange(0, len(self.detected_location)):
+            enemy_cell_x = int(np.floor(self.detected_location[a][0] / env.visibility_cell_width))
+            enemy_cell_y = int(np.floor(self.detected_location[a][1] / env.visibility_cell_width))
+            ind_enemy_threat = []
+            for b in np.arange(0, len(self.unit.member)):
+                cell_x = int(np.floor(self.unit.member[b].location[0] / env.visibility_cell_width))
+                cell_y = int(np.floor(self.unit.member[b].location[1] / env.visibility_cell_width))
+                if np.sqrt((self.unit.member[b].location[0] - self.detected_location[a][0])**2 + (self.unit.member[b].location[1] - self.detected_location[a][1])**2) < 50:
+                    ind_enemy_threat.append(env.visibility_cell[enemy_cell_x][enemy_cell_y].v_map[cell_x][cell_y])
+                else:
+                    ind_enemy_threat.append(0)
+            enemy_threat.append(ind_enemy_threat)
+        # Calculate threat of each friendly member to each detected enemy
+        friendly_threat = []
+        for a in np.arange(0, len(self.unit.member)):
+            cell_x = int(np.floor(self.unit.member[a].location[0] / env.visibility_cell_width))
+            cell_y = int(np.floor(self.unit.member[a].location[1] / env.visibility_cell_width))
+            ind_friendly_threat = []
+            for b in np.arange(0, len(self.detected_location)):
+                enemy_cell_x = int(np.floor(self.detected_location[b][0] / env.visibility_cell_width))
+                enemy_cell_y = int(np.floor(self.detected_location[b][1] / env.visibility_cell_width))
+                if np.sqrt((self.detected_location[b][0] - self.unit.member[a].location[0])**2 + (self.detected_location[b][1] - self.unit.member[a].location[1])**2) < self.unit.member[a].effective_range:
+                    ind_friendly_threat.append(env.visibility_cell[cell_x][cell_y].v_map[enemy_cell_x][enemy_cell_y])
+                else:
+                    ind_friendly_threat.append(0)
+            friendly_threat.append(ind_friendly_threat)
+        # Calculate threat ratio of each detected enemy
+        enemy_threat_ratio = []
+        for a in np.arange(0, len(enemy_threat)):
+            out_threat = np.sum(enemy_threat[a])
+            in_threat = 0
+            for b in np.arange(0, len(friendly_threat)):
+                in_threat += friendly_threat[b][a]
+            if in_threat != 0:
+                enemy_threat_ratio.append(out_threat / in_threat)
+            else:
+                enemy_threat_ratio.append(out_threat)
+        # Calculate threat ratio of each friendly member
+        friendly_threat_ratio = []
+        for a in np.arange(0, len(friendly_threat)):
+            out_threat = np.sum(friendly_threat[a])
+            in_threat = 0
+            for b in np.arange(0, len(enemy_threat)):
+                in_threat += enemy_threat[b][a]
+            if in_threat != 0:
+                friendly_threat_ratio.append(out_threat / in_threat)
+            else:
+                friendly_threat_ratio.append(out_threat)
+        # Need to decide on logic for engaging, etc based on threat ratios
+        # For now, if enemy is detected, order to hold position
         # Check detected locations here
         # Perform SA, etc here
-        self.unit.setOrder(order)
+        if np.mean(enemy_threat_ratio) > 0:
+            self.unit.setOrder(order.Hold())
+        else:
+            self.unit.setOrder(Order)
     
     def detect(self, env, enemy_force):
         detected_location = self.unit.detect(env, enemy_force)
@@ -186,9 +287,6 @@ class SectionCommander(Commander):
         return detected_location
     
     def createEvents(self, env, enemy_force):
-        """
-        ...
-        """
         [manID, eventType, eventData] = self.unit.createEvents(env, enemy_force)
         sectionID = [self.sectionID] * len(manID)
         return [sectionID, manID, eventType, eventData]
@@ -222,19 +320,19 @@ class PlatoonCommander(Commander):
             obj_graph.node[n]['Owner'] = c[i]
             i += 1
     
-    def getOrder(self, order):
+    def getOrder(self, Order, env):
         """
         ...
         """
-        self.order = order
-        self.giveOrders()
+        self.order = Order
+        self.giveOrders(env)
     
-    def giveOrders(self):
+    def giveOrders(self, env):
         """
         ...
         """
         for S in self.section:
-            S.getOrder(self.order)
+            S.getOrder(self.order, env)
     
     def detect(self, env, enemy_force):
         detected_location = []
@@ -292,13 +390,32 @@ class CompanyCommander(Commander):
         for n in obj_graph.successors_iter(obj):
             self.platoon[obj_graph.node[n]['Owner']].assignAssetObjectives(obj_graph, n)
     
-    def getOrder(self, order):
-        self.order = order
-        self.giveOrders()
+    def getOrder(self, Order, obj_graph, objective, env):
+        self.order = Order
+        self.giveOrders(obj_graph, objective, env)
     
-    def giveOrders(self):
+    def giveOrders(self, obj_graph, objective, env):
         for P in self.platoon:
-            P.getOrder(self.order)
+            P.getOrder(self.order, env)
+            
+        # -----
+        
+        for i in np.arange(0, len(self.platoon)): # For each platoon...
+            # ...find its assigned objectives
+            objectives = []
+            for n in obj_graph.successors_iter(objective):
+                if obj_graph.node[n]['Owner'] == i:
+                    objectives.append(n)
+            # Select one of these objectives to action
+            if len(objectives) > 0:
+                chosen_objective = objectives[0]
+                # Translate objective to an order
+                obj_type = chosen_objective.type
+                x_ctr = (chosen_objective.NW[0] + chosen_objective.SE[0]) / 2
+                y_ctr = (chosen_objective.NW[1] + chosen_objective.SE[1]) / 2
+                self.platoon[i].getOrder(order.MoveTo([x_ctr, y_ctr]), env)
+            else:
+                self.platoon[i].getOrder(order.Hold(), env)
     
     def detect(self, env, enemy_force):
         detected_location = []
@@ -333,6 +450,11 @@ def assignAssetObjectives(obj_graph, asset, objective, subordinates):
     for n in obj_graph.successors_iter(objective):
         s += 1
     #print('Number of subobjectives: %s' % s)
+    # Find the total number of subobjectives
+    nSuccessors = []
+    for n in obj_graph.successors_iter(objective):
+        nSuccessors.append(countObjectiveSuccessors(obj_graph, n))
+    print(nSuccessors)
     # Find the location of each subobjective
     loc = []
     for n in obj_graph.successors_iter(objective):
@@ -402,3 +524,27 @@ def assignAssetObjectives(obj_graph, asset, objective, subordinates):
             plt.scatter(np.asarray(c_loc)[:,0], np.asarray(c_loc)[:,1])
     plt.show()
     return c
+
+def countObjectiveSuccessors(obj_graph, objective):
+    """
+    For a given objective, count the number of subordinate subobjectives.
+    """
+    nSuccessors = len(obj_graph.successors(objective))
+    for n in obj_graph.successors_iter(objective):
+        nSuccessors += countObjectiveSuccessors(obj_graph, n)
+    return nSuccessors
+
+def SA():
+    """
+    Inputs:
+    - friendly locations
+    - enemy locations
+    - environment
+    """
+    # Perception
+    # ...
+    # Comprehension
+    # ...
+    # Projection
+    # ...
+    pass
