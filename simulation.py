@@ -14,9 +14,12 @@ def timestep():
     # Detection
     for F in force:
         F.detect(env, force[F.enemy_forceID])
+    # Assess objective states
+    for F in force:
+        F.updateObjectiveStatus()
     # Give orders
     for F in force:
-        F.giveOrders()
+        F.giveOrders(env)
     # Event creation
     event_queue = []
     for F in force:
@@ -28,12 +31,30 @@ def timestep():
                         if eventType[a][b][c][d] == 'MOVE':
                             source = [forceID[a], companyID[a][b], platoonID[a][b][c], sectionID[a][b][c][d], manID[a][b][c][d]]
                             event_queue.append(event.MovementEvent(source, eventData[a][b][c][d]))
+                        if eventType[a][b][c][d] == 'FIRE':
+                            source = [forceID[a], companyID[a][b], platoonID[a][b][c], sectionID[a][b][c][d], manID[a][b][c][d]]
+                            target = eventData[a][b][c][d][0]
+                            event_queue.append(event.FireEvent(source, target, eventData[a][b][c][d][1]))
     # Event effect calculation
-    # ...
+    for E in event_queue:
+        if E.type == 'MOVE':
+            pass
+        elif E.type == 'FIRE':
+            E.calculate()
     # Event result application
     for E in event_queue:
         if E.type == 'MOVE':
             E.apply(force)
+        elif E.type == 'FIRE':
+            E.apply(force)
+    # Find number of surviving assets
+    count = []
+    for F in force:
+        count.append(F.countActive())
+    print('Surviving Assets: %s' % count)
+    # Record the state of each force
+    for F in force:
+        F.record(env)
 
 # Initialise environment
 print('Initialising environment...')
@@ -142,17 +163,17 @@ plt.title('Asset Location')
 plt.show()
 
 # Develop general course of action
-#for F in force:
-#    F.decomposeObjective(F.objective, env)
-#    print('Number of objectives: %s' % nx.number_of_nodes(F.obj_graph))
-#    print('Number of dependecies: %s' % nx.number_of_edges(F.obj_graph))
+for F in force:
+    F.decomposeObjective(F.objective, env)
+    print('Number of objectives: %s' % nx.number_of_nodes(F.obj_graph))
+    print('Number of dependecies: %s' % nx.number_of_edges(F.obj_graph))
 
 # Assign assets to objectives
-#for F in force:
-#    F.assignAssetObjectives()
+for F in force:
+    F.assignAssetObjectives()
 
 # Step through time
-for t in np.arange(0, 50):
+for t in np.arange(1, 51):
     print('Timestep: %s' % t)
     # Perform timestep operations
     timestep()
@@ -179,3 +200,19 @@ for t in np.arange(0, 50):
     plt.ylabel('Y')
     plt.title('Asset Location')
     plt.show()
+    
+# Output results
+# Number of active assets
+plt.figure()
+for F in force:
+    plt.plot(F.active_assets)
+plt.xlabel('Timestep')
+plt.ylabel('Active Assets')
+plt.title('Number of Active Assets')
+# Visible area
+plt.figure()
+for F in force:
+    plt.plot(F.visible_area)
+plt.xlabel('Timestep')
+plt.ylabel('Visible Area')
+plt.title('Fraction of Environment Visible')
