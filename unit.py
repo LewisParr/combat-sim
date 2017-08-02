@@ -67,12 +67,27 @@ class Infantry(fInfantry):
         detected_location = []
         for M in self.member:
             detected_location.append(M.detect(env, enemy_force))
-        return detected_location
+        unique_detected_location = []
+        for a in np.arange(0, len(detected_location)):
+            for b in np.arange(0, len(detected_location[a])):
+                x = detected_location[a][b][0]
+                y = detected_location[a][b][1]
+                found = False
+                tol = 0.001
+                for c in unique_detected_location:
+                    if np.absolute(c[0] - x) < tol:
+                        if np.absolute(c[1] - y) < tol:
+                            found = True
+                if found == False:
+                    unique_detected_location.append(detected_location[a][b])
+        return unique_detected_location
     
     def createEvents(self, env, enemy_force):
         # Decide on actions to complete order
         if self.order.type == 'MOVETO':
             [manID, eventType, eventData] = self.moveTo(self.order.target)
+        elif self.order.type == 'HOLD':
+            [manID, eventType, eventData] = self.hold(enemy_force)
         return [manID, eventType, eventData]
     
     def moveTo(self, target):
@@ -81,9 +96,23 @@ class Infantry(fInfantry):
         all_eventData = []
         for M in self.member:
             [manID, change] = M.moveTo(target)
-            all_manID.append(manID)
-            all_eventType.append('MOVE')
-            all_eventData.append(change)
+            if manID != []:
+                all_manID.append(manID)
+                all_eventType.append('MOVE')
+                all_eventData.append(change)
+        return [all_manID, all_eventType, all_eventData]
+    
+    def hold(self, enemy_force):
+        all_manID = []
+        all_eventType = []
+        all_eventData = []
+        # Call for member hold actions here, such as find good nearby cover
+        for M in self.member:
+            [manID, eventData] = M.fireRandomTarget(enemy_force)
+            if manID != []:
+                all_manID.append(manID)
+                all_eventType.append('FIRE')
+                all_eventData.append(eventData)
         return [all_manID, all_eventType, all_eventData]
 
 class AmphibiousInfantry(fInfantry):
