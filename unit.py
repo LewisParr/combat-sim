@@ -4,6 +4,7 @@
 import infantryasset
 import armourasset
 import artilleryasset
+import headquartersasset
 
 import numpy as np
 
@@ -27,6 +28,10 @@ class Headquarters(fHeadquarters):
     """
     def __init__(self):
         self.unitID = 1
+        self.member = headquartersasset.FOB()
+    
+    def setLocation(self, location):
+        self.member.setLocation(location)
 
 class fInfantry(Unit):
     """
