@@ -42,12 +42,14 @@ class TopLevelCommander(Commander):
         self.obj_graph.add_node(self.objective)
         
     def assignAssets(self, assets):
+        self.hq = unit.Headquarters()
         nCompany = len(assets)
         self.company = []
         for C in np.arange(0, nCompany):
             self.company.append(CompanyCommander(C, assets[C]))
     
-    def assignAssetLocations(self, locations):
+    def assignAssetLocations(self, locations, fob_location):
+        self.hq.setLocation(fob_location)
         for C in np.arange(0, len(self.company)):
             for P in np.arange(0, len(self.company[C].platoon)):
                 for S in np.arange(0, len(self.company[C].platoon[P].section)):
@@ -58,7 +60,6 @@ class TopLevelCommander(Commander):
         ...
         """
         depth = 3
-        print(obj.type)
         # Identify threats to objective
         [x, y] = obj.identifyThreats(env)
         # Create new objectives for countering identified threats
@@ -80,10 +81,11 @@ class TopLevelCommander(Commander):
         for t_r in threat_rect:
             ax1.add_patch(t_r)
         ax1.add_patch(obj_rect)
-        # Plot objective graph
-        plt.figure()
-        nx.draw(self.obj_graph)
         plt.show()
+        # Plot objective graph
+#        plt.figure()
+#        nx.draw(self.obj_graph)
+#        plt.show()
         # Expand new objectives if required
         if expand < depth:
             for s in self.obj_graph.successors(obj):
@@ -109,21 +111,28 @@ class TopLevelCommander(Commander):
         for n in self.obj_graph.successors_iter(self.objective):
             self.company[self.obj_graph.node[n]['Owner']].assignAssetObjectives(self.obj_graph, n)
     
-    def updateObjectiveStatus(self, env):
+    def updateObjectiveStatus(self, env, enemy_fob_location):
+        parent_obj_x_ctr = ((self.objective.NW[0] + self.objective.SE[0]) / 2)
+        parent_obj_y_ctr = ((self.objective.NW[1] + self.objective.SE[1]) / 2)
         for n in self.obj_graph.nodes_iter():
+            obj_x_ctr = ((n.NW[0] + n.SE[0]) / 2)
+            obj_y_ctr = ((n.NW[1] + n.SE[1]) / 2)
             # Determine objective priority
+            mission_obj_weight = 3                                              # TO BE LEARNT BY COMMANDER
+            dist = np.sqrt((obj_x_ctr - parent_obj_x_ctr)**2 + (obj_y_ctr - parent_obj_y_ctr)**2)
             priority_decay = 0.5                                                # TO BE LEARNT BY COMMANDER
-            self.obj_graph.node[n]['Priority'] = 1 * (priority_decay**nx.shortest_path_length(self.obj_graph, source=self.objective, target=n))
+            self.obj_graph.node[n]['Priority'] = (1 * (priority_decay**nx.shortest_path_length(self.obj_graph, source=self.objective, target=n))) / (dist * mission_obj_weight)
             # Measure friendly influence over each objective (spatial proximity & visibility)
             spatial_influence = 0
             for C in self.company:
                 for P in C.platoon:
                     for S in P.section:
                         for M in S.unit.member:
-                            x_dist = M.location[0] - ((n.NW[0] + n.SE[0]) / 2)
-                            y_dist = M.location[1] - ((n.NW[1] + n.SE[1]) / 2)
-                            dist = np.sqrt(x_dist**2 + y_dist**2)
+                            dist = np.sqrt((M.location[0] - obj_x_ctr)**2 + (M.location[1] - obj_y_ctr)**2)
                             spatial_influence += 1 / dist
+            friendly_fob_weight = 2                                             # TO BE LEARNT BY COMMANDER
+            dist = np.sqrt((self.hq.member.location[0] - obj_x_ctr)**2 + (self.hq.member.location[1] - obj_y_ctr)**2)
+            spatial_influence += friendly_fob_weight / dist
             v_maps = []
             for C in self.company:
                 for P in C.platoon:
@@ -137,12 +146,10 @@ class TopLevelCommander(Commander):
                 v_map_all = np.maximum(v_map_all, v_maps[i])
             visibility_influence = 0
             for x in np.arange(0, len(v_map_all)):
-                for y in np.arange(0, len(v_map_all)):
+                for y in np.arange(0, len(v_map_all[x])):
                     x_ctr = env.visibility_cell[x][y].x_ctr
                     y_ctr = env.visibility_cell[x][y].y_ctr
-                    x_dist = ((n.NW[0] + n.SE[0]) / 2) - x_ctr
-                    y_dist = ((n.NW[1] + n.SE[1]) / 2) - y_ctr
-                    dist = np.sqrt(x_dist**2 + y_dist**2)
+                    dist = np.sqrt((obj_x_ctr - x_ctr)**2 + (obj_y_ctr - y_ctr)**2)
                     if dist == 0:
                         dist = 1
                     visibility_influence += v_map_all[x][y] / dist
@@ -152,34 +159,76 @@ class TopLevelCommander(Commander):
             # Measure enemy threat to each objective
             enemy_threat = 0
             for l in self.detected_location:
-                x_dist = ((n.NW[0] + n.SE[0]) / 2) - l[0]
-                y_dist = ((n.NW[1] + n.SE[1]) / 2) - l[1]
-                dist = np.sqrt(x_dist**2 + y_dist**2)
+                dist = np.sqrt((obj_x_ctr - l[0])**2 + (obj_y_ctr - l[1])**2)
                 if dist == 0:
                     dist = 1
                 enemy_threat += 1 / dist
+            enemy_fob_weight = 2                                                # TO BE LEARNT BY COMMANDER
+            dist = np.sqrt((enemy_fob_location[0] - obj_x_ctr)**2 + (enemy_fob_location[1] - obj_y_ctr)**2)
+            enemy_threat += enemy_fob_weight / dist
             enemy_threat_weight = 1                                             # TO BE LEARNT BY COMMANDER
             self.obj_graph.node[n]['Enemy Threat'] = enemy_threat * enemy_threat_weight
             # Determine if objective needs to be taken/requires a stationed unit/can be left unattended
+            control_threshold = 2                                               # TO BE LEARNT BY COMMANDER
+            if self.obj_graph.node[n]['Friendly Influence'] / self.obj_graph.node[n]['Enemy Threat'] > control_threshold:
+                self.obj_graph.node[n]['Status'] = 'FRIENDLY'
+            else:
+                self.obj_graph.node[n]['Status'] = 'ADVERSARY'
     
     def giveOrders(self, env):
-        """
-        ...
-        """
-        for i in np.arange(0, len(self.company)): # For each company...
-            # ...find its assigned objectives
-            objectives = []
+        # Calculate the prerequisite ratio for each objective to be assigned
+        prereq = []
+        for n in self.obj_graph.successors_iter(self.objective):
+            nSuccessors = 0
+            for o in self.obj_graph.successors_iter(n):
+                nSuccessors += 1
+            if nSuccessors > 0:
+                nFriendly = 0
+                for o in self.obj_graph.successors_iter(n):
+                    if self.obj_graph.node[o]['Status'] == 'FRIENDLY':
+                        nFriendly += 1
+                prereq_ratio = nFriendly / nSuccessors
+            else:
+                prereq_ratio = 1.0
+            prereq.append(prereq_ratio)
+        # Calculate the assignment weight of each objective to be assigned
+        counter = 0
+        assignment_weight = []
+        for n in self.obj_graph.successors_iter(self.objective):
+            prereq_ratio = prereq[counter]
+            if prereq_ratio == 0:
+                prereq_ratio = 0.001
+            counter += 1
+            priority = self.obj_graph.node[n]['Priority']
+            assignment_weight.append(priority / prereq_ratio)
+        cum_assignment_weight = [assignment_weight[0]]
+        for i in np.arange(1, len(assignment_weight)):
+            cum_assignment_weight.append(cum_assignment_weight[-1] + assignment_weight[i])
+        selection_weight = np.asarray(cum_assignment_weight) / cum_assignment_weight[-1]
+        for j in np.arange(0, len(self.company)):
+            # Select an objective to be assigned (with weights)
+            random_sample = np.random.uniform(low=0.0, high=1.0)
+            found = False
+            i = 0
+            if random_sample < selection_weight[0]:
+                found = True
+            else:
+                while found == False:
+                    i += 1
+                    if random_sample > selection_weight[i-1]:
+                        if random_sample < selection_weight[i]:
+                            found = True
+            selection = i
+            counter = 0
             for n in self.obj_graph.successors_iter(self.objective):
-                if self.obj_graph.node[n]['Owner'] == i:
-                    objectives.append(n)
-            # Select one of these objectives to action
-            chosen_objective = objectives[0]
-            # Translate objective to an order
-            obj_type = chosen_objective.type
+                if counter == selection:
+                    chosen_objective = n
+                counter += 1
+            # Translate the chosen objective to an order
             x_ctr = (chosen_objective.NW[0] + chosen_objective.SE[0]) / 2
             y_ctr = (chosen_objective.NW[1] + chosen_objective.SE[1]) / 2
-            self.company[i].getOrder(order.MoveTo([x_ctr, y_ctr]), self.obj_graph, chosen_objective, env)
-    
+            self.company[j].getOrder(order.MoveTo([x_ctr, y_ctr]), self.obj_graph, chosen_objective, env)
+            
     def detect(self, env, enemy_force):
         detected_location = []
         for C in self.company:
@@ -234,13 +283,18 @@ class TopLevelCommander(Commander):
             for P in C.platoon:
                 for S in P.section:
                     for M in S.unit.member:
-                        cell_x = int(np.floor(M.location[0] / env.visibility_cell_width))
-                        cell_y = int(np.floor(M.location[1] / env.visibility_cell_width))
-                        v_maps.append(np.asarray(env.visibility_cell[cell_x][cell_y].v_map))
-        v_map_all = v_maps[0]
-        for i in np.arange(1, len(v_maps)):
-            v_map_all = np.maximum(v_map_all, v_maps[i])
-        return np.sum(v_map_all) / ((env.nX * env.nY) / (env.visibility_cell_width**2)) # Percentage of environment visible (where visibility of a cell can take a fractional value)
+                        if M.status != 2:
+                            cell_x = int(np.floor(M.location[0] / env.visibility_cell_width))
+                            cell_y = int(np.floor(M.location[1] / env.visibility_cell_width))
+                            v_maps.append(np.asarray(env.visibility_cell[cell_x][cell_y].v_map))
+        if len(v_maps) > 0:
+            v_map_all = v_maps[0]
+            if len(v_maps) > 1:
+                for i in np.arange(1, len(v_maps)):
+                    v_map_all = np.maximum(v_map_all, v_maps[i])
+            return np.sum(v_map_all) / ((env.nX * env.nY) / (env.visibility_cell_width**2)) # Percentage of environment visible (where visibility of a cell can take a fractional value)
+        else:
+            return 0.0
     
     def countDetected(self):
         return len(self.detected_location)
@@ -388,19 +442,73 @@ class PlatoonCommander(Commander):
             obj_graph.node[n]['Owner'] = c[i]
             i += 1
     
-    def getOrder(self, Order, env):
+    def getOrder(self, Order, obj_graph, objective, env):
         """
         ...
         """
         self.order = Order
-        self.giveOrders(env)
+        self.giveOrders(obj_graph, objective, env)
     
-    def giveOrders(self, env):
-        """
-        ...
-        """
-        for S in self.section:
-            S.getOrder(self.order, env)
+    def giveOrders(self, obj_graph, objective, env):
+        # Calculate the prerequisite ratio for each objective to be assigned
+        prereq = []
+        for n in obj_graph.successors_iter(objective):
+            nSuccessors = 0
+            for o in obj_graph.successors_iter(n):
+                nSuccessors += 1
+            if nSuccessors > 0:
+                nFriendly = 0
+                for o in obj_graph.successors_iter(n):
+                    if obj_graph.node[o]['Status'] == 'FRIENDLY':
+                        nFriendly += 1
+                prereq_ratio = nFriendly / nSuccessors
+            else:
+                prereq_ratio = 1.0
+            prereq.append(prereq_ratio)
+        # Calculate the assignment weight of each objective to be assigned
+        counter = 0
+        assignment_weight = []
+        for n in obj_graph.successors_iter(objective):
+            prereq_ratio = prereq[counter]
+            if prereq_ratio == 0:
+                prereq_ratio = 0.001
+            counter += 1
+            priority = obj_graph.node[n]['Priority']
+            assignment_weight.append(priority / prereq_ratio)
+        if len(assignment_weight) > 0:
+            cum_assignment_weight = [assignment_weight[0]]
+            if len(assignment_weight) > 1:
+                for i in np.arange(1, len(assignment_weight)):
+                    cum_assignment_weight.append(cum_assignment_weight[-1] + assignment_weight[i])
+            selection_weight = np.asarray(cum_assignment_weight) / cum_assignment_weight[-1]
+            for j in np.arange(0, len(self.section)):
+                # Select an objective to be assigned (with weights)
+                random_sample = np.random.uniform(low=0.0, high=1.0)
+                found = False
+                i = 0
+                if random_sample < selection_weight[0]:
+                    found = True
+                else:
+                    while found == False:
+                        i += 1
+                        if random_sample > selection_weight[i-1]:
+                            if random_sample < selection_weight[i]:
+                                found = True
+                selection = i
+                counter = 0
+                for n in obj_graph.successors_iter(objective):
+                    if counter == selection:
+                        chosen_objective = n
+                    counter += 1
+                # Translate the chosen objective to an order
+                x_ctr = (chosen_objective.NW[0] + chosen_objective.SE[0]) / 2
+                y_ctr = (chosen_objective.NW[1] + chosen_objective.SE[1]) / 2
+                self.section[j].getOrder(order.MoveTo([x_ctr, y_ctr]), env)
+        else:
+            # Assign own order to each subordinate
+            for j in np.arange(0, len(self.section)):
+                self.section[j].getOrder(self.order, env)
+                
     
     def detect(self, env, enemy_force):
         detected_location = []
@@ -475,27 +583,58 @@ class CompanyCommander(Commander):
         self.giveOrders(obj_graph, objective, env)
     
     def giveOrders(self, obj_graph, objective, env):
-        for P in self.platoon:
-            P.getOrder(self.order, env)
-            
-        # -----
-        
-        for i in np.arange(0, len(self.platoon)): # For each platoon...
-            # ...find its assigned objectives
-            objectives = []
-            for n in obj_graph.successors_iter(objective):
-                if obj_graph.node[n]['Owner'] == i:
-                    objectives.append(n)
-            # Select one of these objectives to action
-            if len(objectives) > 0:
-                chosen_objective = objectives[0]
-                # Translate objective to an order
-                obj_type = chosen_objective.type
-                x_ctr = (chosen_objective.NW[0] + chosen_objective.SE[0]) / 2
-                y_ctr = (chosen_objective.NW[1] + chosen_objective.SE[1]) / 2
-                self.platoon[i].getOrder(order.MoveTo([x_ctr, y_ctr]), env)
+        # Calculate the prerequisite ratio for each objective to be assigned
+        prereq = []
+        for n in obj_graph.successors_iter(objective):
+            nSuccessors = 0
+            for o in obj_graph.successors_iter(n):
+                nSuccessors += 1
+            if nSuccessors > 0:
+                nFriendly = 0
+                for o in obj_graph.successors_iter(n):
+                    if obj_graph.node[o]['Status'] == 'FRIENDLY':
+                        nFriendly += 1
+                prereq_ratio = nFriendly / nSuccessors
             else:
-                self.platoon[i].getOrder(order.Hold(), env)
+                prereq_ratio = 1.0
+            prereq.append(prereq_ratio)
+        # Calculate the assignment weight of each objective to be assigned
+        counter = 0
+        assignment_weight = []
+        for n in obj_graph.successors_iter(objective):
+            prereq_ratio = prereq[counter]
+            if prereq_ratio == 0:
+                prereq_ratio = 0.001
+            counter += 1
+            priority = obj_graph.node[n]['Priority']
+            assignment_weight.append(priority / prereq_ratio)
+        cum_assignment_weight = [assignment_weight[0]]
+        for i in np.arange(1, len(assignment_weight)):
+            cum_assignment_weight.append(cum_assignment_weight[-1] + assignment_weight[i])
+        selection_weight = np.asarray(cum_assignment_weight) / cum_assignment_weight[-1]
+        for j in np.arange(0, len(self.platoon)):
+            # Select an objective to be assigned (with weights)
+            random_sample = np.random.uniform(low=0.0, high=1.0)
+            found = False
+            i = 0
+            if random_sample < selection_weight[0]:
+                found = True
+            else:
+                while found == False:
+                    i += 1
+                    if random_sample > selection_weight[i-1]:
+                        if random_sample < selection_weight[i]:
+                            found = True
+            selection = i
+            counter = 0
+            for n in obj_graph.successors_iter(objective):
+                if counter == selection:
+                    chosen_objective = n
+                counter += 1
+            # Translate the chosen objective to an order
+            x_ctr = (chosen_objective.NW[0] + chosen_objective.SE[0]) / 2
+            y_ctr = (chosen_objective.NW[1] + chosen_objective.SE[1]) / 2
+            self.platoon[j].getOrder(order.MoveTo([x_ctr, y_ctr]), obj_graph, chosen_objective, env)
     
     def detect(self, env, enemy_force):
         detected_location = []
