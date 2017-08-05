@@ -22,14 +22,14 @@ class Objective(object):
         # Fetch the visibility map
         v_map = np.asarray(env.visibility_cell[cell_x][cell_y].v_map)
         # Set the visibility probability cutoff
-        cutoff = 0.48
+        cutoff = 0.475
         # Find locations with visibility probability above the cutoff
         [x, y] = np.where(v_map > cutoff)
         # Plot these locations
-        plt.figure()
-        plt.scatter(x, y)
-        plt.title('Locations Exceeding Cutoff')
-        plt.show()
+#        plt.figure()
+#        plt.scatter(x, y)
+#        plt.title('Locations Exceeding Cutoff')
+#        plt.show()
         # Return the visibility cell (x, y) values of threatening cells
         return [x, y]
 
