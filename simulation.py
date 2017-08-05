@@ -16,7 +16,7 @@ def timestep():
         F.detect(env, force[F.enemy_forceID])
     # Assess objective states
     for F in force:
-        F.updateObjectiveStatus(env)
+        F.updateObjectiveStatus(env, force[F.enemy_forceID].hq.member.location)
     # Give orders
     for F in force:
         F.giveOrders(env)
@@ -85,10 +85,10 @@ force.append(commander.EnemyCommander(0))
 force.append(commander.FriendlyCommander(1))
 force[0].assignObjective(scene.adversary_objective)
 force[0].assignAssets(scene.adversary_assets)
-force[0].assignAssetLocations(scene.adversary_asset_locations)
+force[0].assignAssetLocations(scene.adversary_asset_locations, scene.adversary_fob_location)
 force[1].assignObjective(scene.friendly_objective)
 force[1].assignAssets(scene.friendly_assets)
-force[1].assignAssetLocations(scene.friendly_asset_locations)
+force[1].assignAssetLocations(scene.friendly_asset_locations, scene.friendly_fob_location)
 
 # Create graph of enemy assets
 E = nx.DiGraph()
@@ -153,9 +153,11 @@ for F in force:
         for P in np.arange(0, len(F.company[C].platoon)):
             for S in np.arange(0, len(F.company[C].platoon[P].section)):
                 for M in np.arange(0, len(F.company[C].platoon[P].section[S].unit.member)):
-                    x.append(F.company[C].platoon[P].section[S].unit.member[M].location[0])
-                    y.append(F.company[C].platoon[P].section[S].unit.member[M].location[1])
+                    if F.company[C].platoon[P].section[S].unit.member[M].status != 2:
+                        x.append(F.company[C].platoon[P].section[S].unit.member[M].location[0])
+                        y.append(F.company[C].platoon[P].section[S].unit.member[M].location[1])
     plt.scatter(x, y, c=c[a], marker='.')
+    plt.scatter(F.hq.member.location[0], F.hq.member.location[1], c=c[a], marker='x')
     a += 1
 plt.xlabel('X')
 plt.ylabel('Y')
@@ -192,34 +194,65 @@ for t in np.arange(1, 51):
             for P in np.arange(0, len(F.company[C].platoon)):
                 for S in np.arange(0, len(F.company[C].platoon[P].section)):
                     for M in np.arange(0, len(F.company[C].platoon[P].section[S].unit.member)):
-                        x.append(F.company[C].platoon[P].section[S].unit.member[M].location[0])
-                        y.append(F.company[C].platoon[P].section[S].unit.member[M].location[1])
+                        if F.company[C].platoon[P].section[S].unit.member[M].status != 2:
+                            x.append(F.company[C].platoon[P].section[S].unit.member[M].location[0])
+                            y.append(F.company[C].platoon[P].section[S].unit.member[M].location[1])
         plt.scatter(x, y, c=c[a], marker='.')
+        plt.scatter(F.hq.member.location[0], F.hq.member.location[1], c=c[a], marker='x')
         a += 1
     plt.xlabel('X')
     plt.ylabel('Y')
     plt.title('Asset Location')
     plt.show()
+    # Plot detected enemy locations
+    print('Plotting detected enemy locations...')
+    X, Y = np.meshgrid(np.arange(0, env.nX), np.arange(0, env.nY))
+    Z = env.getTerrainCellElevations()
+    plt.figure()
+    plt.contourf(X, Y, Z)
+    c = ['b', 'r'] # Colours are reversed (locations represent adversary)
+    a = 0
+    for F in force:
+        x = []
+        y = []
+        for l in F.detected_location:
+            x.append(l[0])
+            y.append(l[1])
+        plt.scatter(x, y, c=c[a], marker='.')
+        a += 1
+    plt.xlabel('X')
+    plt.ylabel('Y')
+    plt.title('Detected Enemy Asset Location')
+    plt.show()
     
 # Output results
 # Number of active assets
 plt.figure()
+c = ['r', 'b']
+a = 0
 for F in force:
-    plt.plot(F.active_assets)
+    plt.plot(F.active_assets, c=c[a])
+    a += 1
 plt.xlabel('Timestep')
 plt.ylabel('Active Assets')
 plt.title('Number of Active Assets')
 # Visible area
 plt.figure()
+c = ['r', 'b']
+a = 0
 for F in force:
-    plt.plot(F.visible_area)
+    plt.plot(F.visible_area, c=c[a])
+    a += 1
 plt.xlabel('Timestep')
 plt.ylabel('Visible Area')
 plt.title('Fraction of Environment Visible')
 # Number of detected enemy assets
 plt.figure()
+c = ['r', 'b']
+a = 0
 for F in force:
-    plt.plot(F.detected_enemy_assets)
+    plt.plot(F.detected_enemy_assets, c=c[a])
+    a += 1
 plt.xlabel('Timestep')
 plt.ylabel('Enemy Assets')
 plt.title('Number of Detected Enemy Assets')
