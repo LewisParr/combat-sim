@@ -34,6 +34,7 @@ class Environment(object):
         """
         ...
         """
+        # Generate terrain elevations
         x = np.arange(0, self.nX)
         y = np.arange(0, self.nY)
         xx, yy = np.meshgrid(x, y)
@@ -49,10 +50,14 @@ class Environment(object):
             j.append(j_row)
         H = np.exp(-0.5 * (np.square(i) + np.square(j)) / F**2)
         Z = np.real(np.fft.ifft2(H * np.fft.ifft2(np.random.normal(0, 1, [self.nX, self.nY]))))
-        # Save Z values to respective terrain cells
         for x in np.arange(0, self.nX):
             for y in np.arange(0, self.nY):
                 self.terrain_cell[x][y].setElevation(Z[x][y])
+        # Generate terrain cover values
+        # For now, cover is given by random sample
+        for x in np.arange(0, self.nX):
+            for y in np.arange(0, self.nY):
+                self.terrain_cell[x][y].setCover(np.random.uniform(low=0.0, high=0.5))
     
     def getTerrainCellElevations(self):
         Z = []
@@ -350,6 +355,9 @@ class TerrainCell(Cell):
     """
     def setElevation(self, Z):
         self.Z = Z
+    
+    def setCover(self, cover):
+        self.cover = cover
 
 class VisibilityCell(Cell):
     """
