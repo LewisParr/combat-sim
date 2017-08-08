@@ -54,10 +54,13 @@ class Environment(object):
             for y in np.arange(0, self.nY):
                 self.terrain_cell[x][y].setElevation(Z[x][y])
         # Generate terrain cover values
-        # For now, cover is given by random sample
         for x in np.arange(0, self.nX):
             for y in np.arange(0, self.nY):
                 self.terrain_cell[x][y].setCover(np.random.uniform(low=0.0, high=0.5))
+        # Generate terrain concealment values
+        for x in np.arange(0, self.nX):
+            for y in np.arange(0, self.nY):
+                self.terrain_cell[x][y].setConcealment(np.random.uniform(low=0.0, high=0.5))
     
     def getTerrainCellElevations(self):
         Z = []
@@ -358,6 +361,9 @@ class TerrainCell(Cell):
     
     def setCover(self, cover):
         self.cover = cover
+    
+    def setConcealment(self, concealment):
+        self.concealment = concealment
 
 class VisibilityCell(Cell):
     """
