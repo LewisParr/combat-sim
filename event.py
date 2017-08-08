@@ -30,16 +30,21 @@ class FireEvent(Event):
     """
     ...
     """
-    def __init__(self, source, target, phit):
+    def __init__(self, source, target, phit, cover):
         self.type = 'FIRE'
         self.source = source
         self.target = target
         self.phit = phit
+        self.cover = cover
     
     def calculate(self):
         random_sample = np.random.uniform(low=0.0, high=1.0)
         if random_sample < self.phit:
-            self.hit_result = True
+            random_sample = np.random.uniform(low=0.0, high=1.0)
+            if random_sample < self.cover:
+                self.hit_result = True
+            else:
+                self.hit_result = False
         else:
             self.hit_result = False
     
