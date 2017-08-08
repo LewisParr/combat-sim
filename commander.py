@@ -26,12 +26,23 @@ class TopLevelCommander(Commander):
     TopLevelCommander provides an interface for the commanders most senior in
     the friendly and enemy forces.
     """
-    def __init__(self, forceID):
+    def __init__(self, forceID, parameters):
         self.forceID = forceID
         if self.forceID == 0:
             self.enemy_forceID = 1
         else:
             self.enemy_forceID = 0
+        # Set commander parameters
+        self.mission_obj_weight = parameters[0]
+        self.priority_decay = parameters[1]
+        self.friendly_fob_weight = parameters[2]
+        self.spatial_influence_weight = parameters[3]
+        self.visibility_influence_weight = parameters[4]
+        self.enemy_fob_weight = parameters[5]
+        self.enemy_threat_weight = parameters[6]
+        self.control_threshold = parameters[7]
+        self.priority_cutoff = parameters[8]
+        # Initialise lists
         self.active_assets = []
         self.visible_area = []
         self.detected_enemy_assets = []
@@ -127,10 +138,8 @@ class TopLevelCommander(Commander):
             obj_x_ctr = ((n.NW[0] + n.SE[0]) / 2)
             obj_y_ctr = ((n.NW[1] + n.SE[1]) / 2)
             # Determine objective priority
-            mission_obj_weight = 3                                              # TO BE LEARNT BY COMMANDER
             dist = np.sqrt((obj_x_ctr - parent_obj_x_ctr)**2 + (obj_y_ctr - parent_obj_y_ctr)**2)
-            priority_decay = 0.5                                                # TO BE LEARNT BY COMMANDER
-            self.obj_graph.node[n]['Priority'] = (1 * (priority_decay**nx.shortest_path_length(self.obj_graph, source=self.objective, target=n))) / (dist * mission_obj_weight)
+            self.obj_graph.node[n]['Priority'] = (1 * (self.priority_decay**nx.shortest_path_length(self.obj_graph, source=self.objective, target=n))) / (dist * self.mission_obj_weight)
             # Measure friendly influence over each objective (spatial proximity & visibility)
             spatial_influence = 0
             for C in self.company:
@@ -139,9 +148,8 @@ class TopLevelCommander(Commander):
                         for M in S.unit.member:
                             dist = np.sqrt((M.location[0] - obj_x_ctr)**2 + (M.location[1] - obj_y_ctr)**2)
                             spatial_influence += 1 / dist
-            friendly_fob_weight = 2                                             # TO BE LEARNT BY COMMANDER
             dist = np.sqrt((self.hq.member.location[0] - obj_x_ctr)**2 + (self.hq.member.location[1] - obj_y_ctr)**2)
-            spatial_influence += friendly_fob_weight / dist
+            spatial_influence += self.friendly_fob_weight / dist
             v_maps = []
             for C in self.company:
                 for P in C.platoon:
@@ -162,9 +170,7 @@ class TopLevelCommander(Commander):
                     if dist == 0:
                         dist = 1
                     visibility_influence += v_map_all[x][y] / dist
-            spatial_influence_weight = 1                                        # TO BE LEARNT BY COMMANDER
-            visibility_influence_weight = 1                                     # TO BE LEARNT BY COMMANDER
-            self.obj_graph.node[n]['Friendly Influence'] = (spatial_influence * spatial_influence_weight) + (visibility_influence * visibility_influence_weight)
+            self.obj_graph.node[n]['Friendly Influence'] = (spatial_influence * self.spatial_influence_weight) + (visibility_influence * self.visibility_influence_weight)
             # Measure enemy threat to each objective
             enemy_threat = 0
             for l in self.detected_location:
@@ -172,14 +178,11 @@ class TopLevelCommander(Commander):
                 if dist == 0:
                     dist = 1
                 enemy_threat += 1 / dist
-            enemy_fob_weight = 2                                                # TO BE LEARNT BY COMMANDER
             dist = np.sqrt((enemy_fob_location[0] - obj_x_ctr)**2 + (enemy_fob_location[1] - obj_y_ctr)**2)
-            enemy_threat += enemy_fob_weight / dist
-            enemy_threat_weight = 1                                             # TO BE LEARNT BY COMMANDER
-            self.obj_graph.node[n]['Enemy Threat'] = enemy_threat * enemy_threat_weight
+            enemy_threat += self.enemy_fob_weight / dist
+            self.obj_graph.node[n]['Enemy Threat'] = enemy_threat * self.enemy_threat_weight
             # Determine if objective needs to be taken/requires a stationed unit/can be left unattended
-            control_threshold = 2                                               # TO BE LEARNT BY COMMANDER
-            if self.obj_graph.node[n]['Friendly Influence'] / self.obj_graph.node[n]['Enemy Threat'] > control_threshold:
+            if self.obj_graph.node[n]['Friendly Influence'] / self.obj_graph.node[n]['Enemy Threat'] > self.control_threshold:
                 self.obj_graph.node[n]['Status'] = 'FRIENDLY'
             else:
                 self.obj_graph.node[n]['Status'] = 'ADVERSARY'
@@ -223,8 +226,7 @@ class TopLevelCommander(Commander):
             current_order = self.assigned_objective[j]
             if current_order != None:
                 current_priority = self.obj_graph.node[current_order]['Priority']
-                priority_cutoff = 0.75                                          # TO BE LEARNT BY COMMANDER
-                if current_priority < (priority_cutoff * mean_priority):
+                if current_priority < (self.priority_cutoff * mean_priority):
                     self.assignSubordinate(j, chooseObjective(selection_weight), self.obj_graph, self.objective, env)
                 else:
                     self.company[j].getOrder(None, self.obj_graph, current_order, env)
@@ -418,9 +420,10 @@ class SectionCommander(Commander):
         # Check detected locations here
         # Perform SA, etc here
         if np.mean(enemy_threat_ratio) > 0:
-            self.unit.setOrder(order.Hold())
+            self.unit.setOrder(order.Defend())
         else:
             self.unit.setOrder(Order)
+        # Send order to defend if in location
     
     def detect(self, env, enemy_force):
         detected_location = self.unit.detect(env, enemy_force)
