@@ -34,7 +34,7 @@ def timestep():
                         if eventType[a][b][c][d] == 'FIRE':
                             source = [forceID[a], companyID[a][b], platoonID[a][b][c], sectionID[a][b][c][d], manID[a][b][c][d]]
                             target = eventData[a][b][c][d][0]
-                            event_queue.append(event.FireEvent(source, target, eventData[a][b][c][d][1]))
+                            event_queue.append(event.FireEvent(source, target, eventData[a][b][c][d][1], eventData[a][b][c][d][2]))
     # Event effect calculation
     for E in event_queue:
         if E.type == 'MOVE':
@@ -55,6 +55,10 @@ def timestep():
     # Record the state of each force
     for F in force:
         F.record(env)
+
+def end_simulation():
+    for F in force:
+        F.end_simulation()
 
 # Initialise environment
 print('Initialising environment...')
@@ -80,9 +84,19 @@ scene = scenario.TestScenario()
 
 # Initialise commanders
 print('Initialising commanders...')
+mission_obj_weight = 3
+priority_decay = 0.5
+friendly_fob_weight = 2
+spatial_influence_weight = 1
+visibility_influence_weight = 1
+enemy_fob_weight = 2
+enemy_threat_weight = 1
+control_threshold = 2
+priority_cutoff = 0.75
+parameters = [mission_obj_weight, priority_decay, friendly_fob_weight, spatial_influence_weight, visibility_influence_weight, enemy_fob_weight, enemy_threat_weight, control_threshold, priority_cutoff]
 force = []
-force.append(commander.EnemyCommander(0))
-force.append(commander.FriendlyCommander(1))
+force.append(commander.EnemyCommander(0, parameters))
+force.append(commander.FriendlyCommander(1, parameters))
 force[0].assignObjective(scene.adversary_objective)
 force[0].assignAssets(scene.adversary_assets)
 force[0].assignAssetLocations(scene.adversary_asset_locations, scene.adversary_fob_location)
@@ -109,10 +123,10 @@ for C in force[0].company:
             E.add_edge(P,S)
 
 # Draw graph of enemy assets
-plt.figure()
-plt.title('Enemy Assets')
-nx.draw(E, node_color=color_map)
-plt.show()
+#plt.figure()
+#plt.title('Enemy Assets')
+#nx.draw(E, node_color=color_map)
+#plt.show()
 
 # Create graph of friendly assets
 F = nx.DiGraph()
@@ -133,10 +147,10 @@ for C in force[1].company:
             F.add_edge(P,S)
 
 # Draw graph of friendly assets
-plt.figure()
-plt.title('Friendly Assets')
-nx.draw(F, node_color=color_map)
-plt.show()
+#plt.figure()
+#plt.title('Friendly Assets')
+#nx.draw(F, node_color=color_map)
+#plt.show()
 
 # Plot asset locations
 print('Plotting asset locations...')
@@ -171,60 +185,76 @@ for F in force:
     print('Number of dependecies: %s' % nx.number_of_edges(F.obj_graph))
 
 # Assign assets to objectives
-for F in force:
-    F.assignAssetObjectives()
+#for F in force:
+#    F.assignAssetObjectives()
 
 # Step through time
 for t in np.arange(1, 51):
     print('Timestep: %s' % t)
     # Perform timestep operations
     timestep()
-    # Plot asset locations
-    print('Plotting asset locations...')
-    X, Y = np.meshgrid(np.arange(0, env.nX), np.arange(0, env.nY))
-    Z = env.getTerrainCellElevations()
-    plt.figure()
-    plt.contourf(X, Y, Z)
-    c = ['r', 'b']
-    a = 0
-    for F in force:
-        x = []
-        y = []
-        for C in np.arange(0, len(F.company)):
-            for P in np.arange(0, len(F.company[C].platoon)):
-                for S in np.arange(0, len(F.company[C].platoon[P].section)):
-                    for M in np.arange(0, len(F.company[C].platoon[P].section[S].unit.member)):
-                        if F.company[C].platoon[P].section[S].unit.member[M].status != 2:
-                            x.append(F.company[C].platoon[P].section[S].unit.member[M].location[0])
-                            y.append(F.company[C].platoon[P].section[S].unit.member[M].location[1])
-        plt.scatter(x, y, c=c[a], marker='.')
-        plt.scatter(F.hq.member.location[0], F.hq.member.location[1], c=c[a], marker='x')
-        a += 1
-    plt.xlabel('X')
-    plt.ylabel('Y')
-    plt.title('Asset Location')
-    plt.show()
-    # Plot detected enemy locations
-    print('Plotting detected enemy locations...')
-    X, Y = np.meshgrid(np.arange(0, env.nX), np.arange(0, env.nY))
-    Z = env.getTerrainCellElevations()
-    plt.figure()
-    plt.contourf(X, Y, Z)
-    c = ['b', 'r'] # Colours are reversed (locations represent adversary)
-    a = 0
-    for F in force:
-        x = []
-        y = []
-        for l in F.detected_location:
-            x.append(l[0])
-            y.append(l[1])
-        plt.scatter(x, y, c=c[a], marker='.')
-        a += 1
-    plt.xlabel('X')
-    plt.ylabel('Y')
-    plt.title('Detected Enemy Asset Location')
-    plt.show()
-    
+    if np.mod(t, 1) == 0:
+        # Plot asset locations
+        print('Plotting asset locations...')
+        X, Y = np.meshgrid(np.arange(0, env.nX), np.arange(0, env.nY))
+        Z = env.getTerrainCellElevations()
+        plt.figure()
+        plt.contourf(X, Y, Z)
+        c = ['r', 'b']
+        a = 0
+        for F in force:
+            x = []
+            y = []
+            for C in np.arange(0, len(F.company)):
+                for P in np.arange(0, len(F.company[C].platoon)):
+                    for S in np.arange(0, len(F.company[C].platoon[P].section)):
+                        for M in np.arange(0, len(F.company[C].platoon[P].section[S].unit.member)):
+                            if F.company[C].platoon[P].section[S].unit.member[M].status != 2:
+                                x.append(F.company[C].platoon[P].section[S].unit.member[M].location[0])
+                                y.append(F.company[C].platoon[P].section[S].unit.member[M].location[1])
+            plt.scatter(x, y, c=c[a], marker='.')
+            plt.scatter(F.hq.member.location[0], F.hq.member.location[1], c=c[a], marker='x')
+            a += 1
+        plt.xlabel('X')
+        plt.ylabel('Y')
+        plt.title('Asset Location')
+        plt.show()
+        # Plot detected enemy locations
+#        print('Plotting detected enemy locations...')
+#        X, Y = np.meshgrid(np.arange(0, env.nX), np.arange(0, env.nY))
+#        Z = env.getTerrainCellElevations()
+#        plt.figure()
+#        plt.contourf(X, Y, Z)
+#        c = ['b', 'r'] # Colours are reversed (locations represent adversary)
+#        a = 0
+#        for F in force:
+#            x = []
+#            y = []
+#            for l in F.detected_location:
+#                x.append(l[0])
+#                y.append(l[1])
+#            plt.scatter(x, y, c=c[a], marker='.')
+#            a += 1
+#        plt.xlabel('X')
+#        plt.ylabel('Y')
+#        plt.title('Detected Enemy Asset Location')
+#        plt.show()
+end_simulation()
+
+# Generate initial solutions
+# ...
+
+# Analyse order history
+for F in force:
+    print('Order history:')
+    for C in F.company:
+        print(C.order_history)
+        for P in C.platoon:
+#            print(P.order_history)
+            for S in P.section:
+#                print(S.order_history)
+                pass
+
 # Output results
 # Number of active assets
 plt.figure()

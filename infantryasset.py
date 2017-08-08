@@ -28,6 +28,7 @@ class InfantryAsset(object):
                                 cell_x = int(np.floor(M.location[0] / env.visibility_cell_width))
                                 cell_y = int(np.floor(M.location[1] / env.visibility_cell_width))
                                 raw_detection_prob = v_map[cell_x][cell_y]
+                                # Get concealment value and use in detection chance
                                 # Random sample test for detection
                                 random_sample = np.random.uniform()
                                 if random_sample < raw_detection_prob:
@@ -48,7 +49,7 @@ class InfantryAsset(object):
         else:
             return [[], []]
     
-    def fireRandomTarget(self, enemy_force):
+    def fireRandomTarget(self, enemy_force, env):
         if self.status != 2:
             if len(self.detected_location) > 0:
                 # Get subset of detected enemy assets that are within effective range
@@ -80,13 +81,23 @@ class InfantryAsset(object):
                                             target_platoonID = P.platoonID
                                             target_companyID = C.companyID
                                             target_forceID = enemy_force.forceID
-                    return [self.manID, [[target_forceID, target_companyID, target_platoonID, target_sectionID, target_manID], self.phit]]
+                                            # Get cover value and send with event data
+                                            cell_x = int(np.around(x))
+                                            cell_y = int(np.around(y))
+                                            cover = env.terrain_cell[cell_x][cell_y].cover
+                    return [self.manID, [[target_forceID, target_companyID, target_platoonID, target_sectionID, target_manID], self.phit, cover]]
                 else:
                     return [[], []]
             else:
                 return [[], []]
         else:
             return [[], []]
+    
+    def fortify(self):
+        if self.status != 2:
+            self.fortification += self.fortification_rate
+            if self.fortification >= 1.0:
+                self.fortification = 1.0
     
     def applyEvents(self):
         for E in self.event:
@@ -106,6 +117,8 @@ class Rifleman(InfantryAsset):
         self.effective_range = 50
         self.phit = 0.5
         self.status = 0
+        self.fortification = 0
+        self.fortification_rate = 0.25
 
 class AutomaticRifleman(InfantryAsset):
     """
@@ -118,6 +131,8 @@ class AutomaticRifleman(InfantryAsset):
         self.effective_range = 50
         self.phit = 0.5
         self.status = 0
+        self.fortification = 0
+        self.fortification_rate = 0.25
         
 class Marksman(InfantryAsset):
     """
@@ -130,3 +145,5 @@ class Marksman(InfantryAsset):
         self.effective_range = 75
         self.phit = 0.5
         self.status = 0
+        self.fortification = 0
+        self.fortification_rate = 0.25

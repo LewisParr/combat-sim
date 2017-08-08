@@ -26,3 +26,10 @@ class Hold(Order):
     """
     def __init__(self):
         self.type = 'HOLD'
+
+class Defend(Order):
+    """
+    Defend order is given to have a unit fortify and defend its position.
+    """
+    def __init__(self):
+        self.type = 'DEFEND'
