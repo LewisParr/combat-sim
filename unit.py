@@ -58,6 +58,7 @@ class Infantry(fInfantry):
         for M in np.arange(0, nMarksman):
             self.member.append(infantryasset.Marksman(manID))
             manID += 1
+        self.order = None
     
     def setLocation(self, location):
         [x, y] = location
@@ -89,11 +90,16 @@ class Infantry(fInfantry):
     
     def createEvents(self, env, enemy_force):
         # Decide on actions to complete order
-        if self.order.type == 'MOVETO':
-            [manID, eventType, eventData] = self.moveTo(self.order.target)
-        elif self.order.type == 'HOLD':
-            [manID, eventType, eventData] = self.hold(enemy_force)
-        return [manID, eventType, eventData]
+        if self.order != None:
+            if self.order.type == 'MOVETO':
+                [manID, eventType, eventData] = self.moveTo(self.order.target)
+            elif self.order.type == 'HOLD':
+                [manID, eventType, eventData] = self.hold(enemy_force, env)
+            elif self.order.type == 'DEFEND':
+                [manID, eventType, eventData] = self.defend(enemy_force, env)
+            return [manID, eventType, eventData]
+        else:
+            return [[], [], []]
     
     def moveTo(self, target):
         all_manID = []
@@ -107,13 +113,26 @@ class Infantry(fInfantry):
                 all_eventData.append(change)
         return [all_manID, all_eventType, all_eventData]
     
-    def hold(self, enemy_force):
+    def hold(self, enemy_force, env):
         all_manID = []
         all_eventType = []
         all_eventData = []
         # Call for member hold actions here, such as find good nearby cover
         for M in self.member:
-            [manID, eventData] = M.fireRandomTarget(enemy_force)
+            [manID, eventData] = M.fireRandomTarget(enemy_force, env)
+            if manID != []:
+                all_manID.append(manID)
+                all_eventType.append('FIRE')
+                all_eventData.append(eventData)
+        return [all_manID, all_eventType, all_eventData]
+    
+    def defend(self, enemy_force, env):
+        all_manID = []
+        all_eventType = []
+        all_eventData = []
+        for M in self.member:
+            M.fortify()
+            [manID, eventData] = M.fireRandomTarget(enemy_force, env)
             if manID != []:
                 all_manID.append(manID)
                 all_eventType.append('FIRE')
