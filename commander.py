@@ -215,6 +215,7 @@ class TopLevelCommander(Commander):
             priority = self.obj_graph.node[n]['Priority']
             all_priority.append(priority)
             assignment_weight.append(priority / prereq_ratio)
+<<<<<<< HEAD
         if len(assignment_weight) > 0:
             cum_assignment_weight = [assignment_weight[0]]
             for i in np.arange(1, len(assignment_weight)):
@@ -226,6 +227,12 @@ class TopLevelCommander(Commander):
                 y_ctr = (self.objective.NW[1] + self.objective.SE[1]) / 2
                 self.company[j].getOrder(order.MoveTo([x_ctr, y_ctr]), self.obj_graph, self.objective, env)
                 self.assigned_objective[j] = self.objective
+=======
+        cum_assignment_weight = [assignment_weight[0]]
+        for i in np.arange(1, len(assignment_weight)):
+            cum_assignment_weight.append(cum_assignment_weight[-1] + assignment_weight[i])
+        selection_weight = np.asarray(cum_assignment_weight) / cum_assignment_weight[-1]
+>>>>>>> 25363c23a31ec4ac80ef82435032c00f2c99c78a
         # Select objective and assign order to each subordinate asset
         mean_priority = np.mean(all_priority)
         for j in np.arange(0, len(self.company)):
@@ -662,6 +669,7 @@ class CompanyCommander(Commander):
             priority = obj_graph.node[n]['Priority']
             all_priority.append(priority)
             assignment_weight.append(priority / prereq_ratio)
+<<<<<<< HEAD
         if len(assignment_weight) > 0:
             cum_assignment_weight = [assignment_weight[0]]
             for i in np.arange(1, len(assignment_weight)):
@@ -673,6 +681,12 @@ class CompanyCommander(Commander):
                 y_ctr = (self.objective.NW[1] + self.objective.SE[1]) / 2
                 self.company[j].getOrder(order.MoveTo([x_ctr, y_ctr]), self.obj_graph, self.objective, env)
                 self.assigned_objective[j] = self.objective
+=======
+        cum_assignment_weight = [assignment_weight[0]]
+        for i in np.arange(1, len(assignment_weight)):
+            cum_assignment_weight.append(cum_assignment_weight[-1] + assignment_weight[i])
+        selection_weight = np.asarray(cum_assignment_weight) / cum_assignment_weight[-1]
+>>>>>>> 25363c23a31ec4ac80ef82435032c00f2c99c78a
         # Select objective and assign order to each subordinate asset
         mean_priority = np.mean(all_priority)
         for j in np.arange(0, len(self.platoon)):

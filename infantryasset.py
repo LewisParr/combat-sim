@@ -150,4 +150,8 @@ class Marksman(InfantryAsset):
         self.phit = 0.5
         self.status = 0
         self.fortification = 0
+<<<<<<< HEAD
         self.fortification_rate = 0.20
+=======
+        self.fortification_rate = 0.25
+>>>>>>> 25363c23a31ec4ac80ef82435032c00f2c99c78a
