@@ -22,8 +22,8 @@ class Objective(object):
         # Fetch the visibility map
         v_map = np.asarray(env.visibility_cell[cell_x][cell_y].v_map)
         # Set the visibility probability cutoff
-        cutoff = 0.475
-        # Find locations with visibility probability above the cutoff
+        cutoff = 0.44                                                           # NEED TO ADJUST THIS VALUE TO VISIBILITY MAPS, MAYBE BASED ON MEAN VISIBILITY?
+        # Find locations with visibility probability above the cutoff           # ARE THERE ANY OTHER WAYS OF IDENTIFYING (DIFFERENT) OBJECTIVES?
         [x, y] = np.where(v_map > cutoff)
         # Plot these locations
 #        plt.figure()
