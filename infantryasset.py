@@ -109,6 +109,9 @@ class InfantryAsset(object):
     
     def hit(self):
         self.status = 2 # Set status to killed
+    
+    def record_position(self):
+        self.position_history.append(self.location)
 
 class Rifleman(InfantryAsset):
     """
@@ -123,6 +126,8 @@ class Rifleman(InfantryAsset):
         self.status = 0
         self.fortification = 0
         self.fortification_rate = 0.25
+        self.morale = 1.0
+        self.position_history = []
 
 class AutomaticRifleman(InfantryAsset):
     """
@@ -137,6 +142,8 @@ class AutomaticRifleman(InfantryAsset):
         self.status = 0
         self.fortification = 0
         self.fortification_rate = 0.25
+        self.morale = 1.0
+        self.position_history = []
         
 class Marksman(InfantryAsset):
     """
@@ -150,8 +157,6 @@ class Marksman(InfantryAsset):
         self.phit = 0.5
         self.status = 0
         self.fortification = 0
-<<<<<<< HEAD
         self.fortification_rate = 0.20
-=======
-        self.fortification_rate = 0.25
->>>>>>> 25363c23a31ec4ac80ef82435032c00f2c99c78a
+        self.morale = 1.0
+        self.position_history = []
