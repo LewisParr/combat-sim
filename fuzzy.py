@@ -17,7 +17,8 @@ class Rule(object):
         for f in self.function:
             strength.append(f.fireStrength(val[i]))
             i += 1
-        return strength
+        mean_strength = np.mean(strength)
+        return mean_strength
 
 class AssetsKilled(Rule):
     def __init__(self, param, weight):
@@ -59,7 +60,7 @@ class MembershipFunction(object):
         self.Y = Y
         self.param = param
         
-    def fireStrength(val):
+    def fireStrength(self, val):
         if val < self.param[0]:
             return 0.0
         elif val <= self.param[1]:
