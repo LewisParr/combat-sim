@@ -215,7 +215,6 @@ class TopLevelCommander(Commander):
             priority = self.obj_graph.node[n]['Priority']
             all_priority.append(priority)
             assignment_weight.append(priority / prereq_ratio)
-<<<<<<< HEAD
         if len(assignment_weight) > 0:
             cum_assignment_weight = [assignment_weight[0]]
             for i in np.arange(1, len(assignment_weight)):
@@ -227,12 +226,6 @@ class TopLevelCommander(Commander):
                 y_ctr = (self.objective.NW[1] + self.objective.SE[1]) / 2
                 self.company[j].getOrder(order.MoveTo([x_ctr, y_ctr]), self.obj_graph, self.objective, env)
                 self.assigned_objective[j] = self.objective
-=======
-        cum_assignment_weight = [assignment_weight[0]]
-        for i in np.arange(1, len(assignment_weight)):
-            cum_assignment_weight.append(cum_assignment_weight[-1] + assignment_weight[i])
-        selection_weight = np.asarray(cum_assignment_weight) / cum_assignment_weight[-1]
->>>>>>> 25363c23a31ec4ac80ef82435032c00f2c99c78a
         # Select objective and assign order to each subordinate asset
         mean_priority = np.mean(all_priority)
         for j in np.arange(0, len(self.company)):
@@ -308,7 +301,7 @@ class TopLevelCommander(Commander):
     
     def calculateAttritionRate(self):
         attrition_rate = [0]
-        for i in np.arange(1, self.active_assets):
+        for i in np.arange(1, len(self.active_assets)):
             attrition_rate.append((self.active_assets[i] - self.active_assets[i-1]) / 1) # CHANGE 1 TO LENGTH OF A TIMESTEP
         return attrition_rate
     
@@ -342,6 +335,13 @@ class TopLevelCommander(Commander):
         self.visible_area.append(self.measureVisibleArea(env))
         # Save the number of detected enemy assets
         self.detected_enemy_assets.append(self.countDetected())
+    
+    def record_positions(self):
+        for C in self.company:
+            for P in C.platoon:
+                for S in P.section:
+                    for M in S.unit.member:
+                        M.record_position()
            
 class FriendlyCommander(TopLevelCommander):
     """
@@ -545,10 +545,10 @@ class PlatoonCommander(Commander):
                         self.section[j].getOrder(None, env)
                 else:
                     self.assignSubordinate(j, chooseObjective(selection_weight), obj_graph, objective, env)
-            else:
-                # Assign own order to each subordinate
-                for j in np.arange(0, len(self.section)):
-                    self.section[j].getOrder(self.order, env)
+        else:
+            # Assign own order to each subordinate
+            for j in np.arange(0, len(self.section)):
+                self.section[j].getOrder(self.order, env)
                     
     def assignSubordinate(self, sectionID, selection, obj_graph, objective, env):
         counter = 0
@@ -669,24 +669,17 @@ class CompanyCommander(Commander):
             priority = obj_graph.node[n]['Priority']
             all_priority.append(priority)
             assignment_weight.append(priority / prereq_ratio)
-<<<<<<< HEAD
         if len(assignment_weight) > 0:
             cum_assignment_weight = [assignment_weight[0]]
             for i in np.arange(1, len(assignment_weight)):
                 cum_assignment_weight.append(cum_assignment_weight[-1] + assignment_weight[i])
             selection_weight = np.asarray(cum_assignment_weight) / cum_assignment_weight[-1]
         else:
-            for j in np.arange(0, len(self.company)):
-                x_ctr = (self.objective.NW[0] + self.objective.SE[0]) / 2
-                y_ctr = (self.objective.NW[1] + self.objective.SE[1]) / 2
-                self.company[j].getOrder(order.MoveTo([x_ctr, y_ctr]), self.obj_graph, self.objective, env)
-                self.assigned_objective[j] = self.objective
-=======
-        cum_assignment_weight = [assignment_weight[0]]
-        for i in np.arange(1, len(assignment_weight)):
-            cum_assignment_weight.append(cum_assignment_weight[-1] + assignment_weight[i])
-        selection_weight = np.asarray(cum_assignment_weight) / cum_assignment_weight[-1]
->>>>>>> 25363c23a31ec4ac80ef82435032c00f2c99c78a
+            for j in np.arange(0, len(self.platoon)):
+                x_ctr = (objective.NW[0] + objective.SE[0]) / 2
+                y_ctr = (objective.NW[1] + objective.SE[1]) / 2
+                self.platoon[j].getOrder(order.MoveTo([x_ctr, y_ctr]), obj_graph, objective, env)
+                self.assigned_objective[j] = objective
         # Select objective and assign order to each subordinate asset
         mean_priority = np.mean(all_priority)
         for j in np.arange(0, len(self.platoon)):
