@@ -11,9 +11,6 @@ class Event(object):
     pass
 
 class MovementEvent(Event):
-    """
-    ...
-    """
     def __init__(self, source, change):
         """
         change - [x, y] changes relative to current location
@@ -27,9 +24,6 @@ class MovementEvent(Event):
             force[self.source[0]].company[self.source[1]].platoon[self.source[2]].section[self.source[3]].unit.member[self.source[4]].location[i] += self.change[i]
 
 class FireEvent(Event):
-    """
-    ...
-    """
     def __init__(self, source, target, phit, cover):
         self.type = 'FIRE'
         self.source = source
@@ -51,4 +45,16 @@ class FireEvent(Event):
     def apply(self, force):
         if self.hit_result == True:
             force[self.target[0]].company[self.target[1]].platoon[self.target[2]].section[self.target[3]].unit.member[self.target[4]].hit()
-            
+            force[self.target[0]].company[self.target[1]].platoon[self.target[2]].section[self.target[3]].unit.hit()
+
+class LowMoraleRetreat(Event):
+    def __init__(self, source, speed):
+        self.type = 'RETREAT'
+        self.source = source
+        x_change = np.random.uniform(0, speed)
+        y_change = np.sqrt(speed**2 - x_change**2)
+        self.change = [x_change, y_change]
+    
+    def apply(self, force):
+        for i in np.arange(0, len(force[self.source[0]].company[self.source[1]].platoon[self.source[2]].section[self.source[3]].unit.member[self.source[4]].location)):
+            force[self.source[0]].company[self.source[1]].platoon[self.source[2]].section[self.source[3]].unit.member[self.source[4]].location[i] += self.change[i]
