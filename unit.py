@@ -61,9 +61,10 @@ class Infantry(fInfantry):
         self.order = None
     
     def setLocation(self, location):
-        [x, y] = location
+#        [x, y] = location
         for M in self.member:
-            M.setLocation([x + np.random.random(), y + np.random.random()])
+#            M.setLocation([x + np.random.random(), y + np.random.random()]) # POSSIBLE TO START OUTSIDE ENVIRONMENT
+            M.setLocation(location)
     
     def setOrder(self, order):
         self.order = order
@@ -89,6 +90,12 @@ class Infantry(fInfantry):
         return unique_detected_location
     
     def createEvents(self, env, enemy_force):
+        for M in self.member:
+            if M.morale < 1.0:
+                if M.morale + 0.05 < 1.0:
+                    M.morale += 0.05
+                else:
+                    M.morale = 1.0
         # Decide on actions to complete order
         if self.order != None:
             if self.order.type == 'MOVETO':
@@ -138,6 +145,13 @@ class Infantry(fInfantry):
                 all_eventType.append('FIRE')
                 all_eventData.append(eventData)
         return [all_manID, all_eventType, all_eventData]
+    
+    def hit(self):
+        for M in self.member:
+            M.morale -= 0.2
+            if M.morale <= 0:
+                # NEED TO DECIDE
+                pass
 
 class AmphibiousInfantry(fInfantry):
     """
