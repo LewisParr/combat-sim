@@ -3,6 +3,7 @@
 
 import fuzzy
 
+import csv
 import numpy as np
 
 class Solution(object):
@@ -73,14 +74,18 @@ class Population(object):
         i = 0
         strength = []
         for r in self.rule:
-            print(values[i])
             strength.append(r.fireStrength(values[i]))
             i += 1
         fitness = 0
         for i in np.arange(0, len(self.rule)):
             fitness += strength[i] * self.rule[i].weight
         self.solution[isolution].fitness = fitness
-        
+        # Record details for analysis (not part of simulation/algorithm)
+        parameters = self.solution[isolution].parameters
+        output = parameters + assets_killed + battlespace_visibility + fitness
+        with open('fitness.txt', 'w') as output_file:
+            wr = csv.writer(output_file)
+            wr.writerow(output)
     
     def breed(self):
         # Select the number of children to breed (must use fewer parents than 
