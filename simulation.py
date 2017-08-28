@@ -338,7 +338,7 @@ def run_Simulation():
 #test = Optimise('LOCAL', 3, 2)
 
 #env = generate_Environment()
-#scene = scenario.RandomScenario([env.nX, env.nY])
+scene = scenario.RandomScenario([env.nX, env.nY])
 
 cwCover = 1.0
 cwConceal = 1.0
@@ -348,7 +348,7 @@ cwMissObjProx = 1.0
 pwFriendlyFOBProx = 1.0
 pwEnemyFOBProx = 1.0
 pwMissObjProx = 1.0
-company_parameters = [1.0, 1.0, 1.0, [40.0]]
+company_parameters = [1.0, 1.0, 1.0, [30.0]]
 parameters = [cwCover, cwConceal, cwVis, cwEnemyFOBProx, cwMissObjProx, pwFriendlyFOBProx, pwEnemyFOBProx, pwMissObjProx, company_parameters]
 
 force = []                                                 # Initialise commanders
@@ -436,7 +436,7 @@ def record_positions():
 for t in np.arange(1, 101):                                      # Step through time
     print('Timestep: %s' % t)
     timestep()                                             # Perform timestep operations
-    if np.mod(t, 25) == 0:
+    if np.mod(t, 1) == 0:
         plot_Locations(env, force)
         plot_Detected(env, force)
 end_simulation()
