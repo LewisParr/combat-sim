@@ -173,13 +173,13 @@ class Environment(object):
         while y[-1] + grid_width/2 < self.nY-1:
             y.append(y[-1] + grid_width)
         v_prob = []
-        for a in np.arange(0, len(x)-1):
+        for a in np.arange(0, len(x)):
             row_v_prob = []
-            for b in np.arange(0, len(y)-1):
-                lo_x = x[a]
-                hi_x = x[a+1]
-                lo_y = y[b]
-                hi_y = y[b+1]
+            for b in np.arange(0, len(y)):
+                lo_x = x[a] - (grid_width / 2)
+                hi_x = x[a] + (grid_width / 2)
+                lo_y = y[b] - (grid_width / 2)
+                hi_y = y[b] + (grid_width / 2)
                 over_lo_x = all_x >= lo_x
                 under_hi_x = all_x < hi_x
                 satisfy_x = np.logical_and(over_lo_x, under_hi_x)
@@ -201,7 +201,7 @@ class Environment(object):
                     grid_v_prob = 0
                 row_v_prob.append(grid_v_prob)
             v_prob.append(row_v_prob)
-        xx, yy = np.meshgrid(x[0:-1], y[0:-1])
+        xx, yy = np.meshgrid(x, y)
         plt.figure()
         plt.contourf(xx, yy, v_prob)
         plt.show()
