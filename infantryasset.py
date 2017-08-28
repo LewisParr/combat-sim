@@ -47,8 +47,12 @@ class InfantryAsset(object):
             x_dist = target[0] - self.location[0]
             y_dist = target[1] - self.location[1]
             dist = np.sqrt(x_dist**2 + y_dist**2)
-            x_change = (x_dist / dist) * self.max_speed
-            y_change = (y_dist / dist) * self.max_speed
+            if dist < self.max_speed:
+                x_change = x_dist
+                y_change = y_dist
+            else:
+                x_change = (x_dist / dist) * self.max_speed
+                y_change = (y_dist / dist) * self.max_speed
             return [self.manID, [x_change, y_change]]
         else:
             return [[], []]
@@ -120,7 +124,7 @@ class Rifleman(InfantryAsset):
     """
     def __init__(self, riflemanID):
         self.manID = riflemanID
-        self.max_speed = 5
+        self.max_speed = 2.5
         self.effective_range = 50
         self.phit = 0.5
         self.status = 0
@@ -136,7 +140,7 @@ class AutomaticRifleman(InfantryAsset):
     """
     def __init__(self, autoriflemanID):
         self.manID = autoriflemanID
-        self.max_speed = 5
+        self.max_speed = 2.5
         self.effective_range = 50
         self.phit = 0.5
         self.status = 0
@@ -152,7 +156,7 @@ class Marksman(InfantryAsset):
     """
     def __init__(self, marksmanID):
         self.manID = marksmanID
-        self.max_speed = 5
+        self.max_speed = 2.5
         self.effective_range = 75
         self.phit = 0.5
         self.status = 0
