@@ -30,7 +30,7 @@ class Optimise(object):
         for g in np.arange(0, self.nGenerations):                               # Repeat process for given number of generations
             if g != 0:                                                          # Generate a new environment and scenario if optimising globally and this is not the first generation
                 if self.goal == 'GLOBAL':
-#                    self.env = generate_Environment()
+                    self.env = generate_Environment()
                     scene = scenario.TestScenario()
             else:
                 self.env = generate_Environment()
@@ -40,19 +40,30 @@ class Optimise(object):
                 selected.append(self.pop[i].chooseSolutions())
             for a in np.arange(0, len(selected[0])):                            # Simulate each solution pair
                 self.force = []                                                 # Initialise commanders
-                self.force.append(commander.EnemyCommander(0, selected[0][a].parameters))
-                self.force.append(commander.FriendlyCommander(1, selected[1][a].parameters))
-                self.force[0].assignObjective(scene.adversary_objective)
+                self.force.append(commander.TopLevelCommander(0, selected[0][a].parameters, scene.adversary_objective))
+                self.force.append(commander.TopLevelCommander(1, selected[1][a].parameters, scene.friendly_objective))
                 self.force[0].assignAssets(scene.adversary_assets)
                 self.force[0].assignAssetLocations(scene.adversary_asset_locations, scene.adversary_fob_location)
-                self.force[1].assignObjective(scene.friendly_objective)
                 self.force[1].assignAssets(scene.friendly_assets)
                 self.force[1].assignAssetLocations(scene.friendly_asset_locations, scene.friendly_fob_location)
                 plot_Locations(self.env, self.force)                            # Plot asset locations
-                for F in self.force:                                            # Decompose mission objective
-                    F.decomposeObjective(F.objective, self.env)
-                    print('Number of objectives: %s' % nx.number_of_nodes(F.obj_graph))
-                    print('Number of dependecies: %s' % nx.number_of_edges(F.obj_graph))
+                for F in force:                                                 # Battlegroup commander assign zones to companies
+                    F.assignZones(env, force[F.enemy_forceID].hq.member.location)
+#                plot_Zones(force, env)
+                for F in force:                                                 # Company commander assign COA to platoons
+                    for C in F.company:
+                        C.assignCOAPath(F.assignment, F.ctr, F.cost, F.priority, F.hq.member.location, F.objective.ctr, F.sector)
+#                plot_PlatoonCOA(force, env)
+                for F in force:                                                 # Platoon commander assign COA to sections
+                    for C in F.company:
+                        for P in C.platoon:
+                            P.assignCOAPath(C.assignment, C.AO, C.sector_loc)
+#                plot_SectionCOA(force, env)
+                for F in force:                                                 # Section commander receives COA
+                    for C in F.company:
+                        for P in C.platoon:
+                            for S in P.section:
+                                S.assignPath(P.assignment, P.AO, P.sector_loc)
                 for t in np.arange(1, 101):                                      # Step through time
                     print('Timestep: %s' % t)
                     self.timestep()                                             # Perform timestep operations
@@ -87,12 +98,6 @@ class Optimise(object):
         # Detection
         for F in self.force:
             F.detect(self.env, self.force[F.enemy_forceID])
-        # Assess objective states
-        for F in self.force:
-            F.updateObjectiveStatus(self.env, self.force[F.enemy_forceID].hq.member.location)
-        # Give orders
-        for F in self.force:
-            F.giveOrders(self.env)
         # Event creation
         event_queue = []
         for F in self.force:
@@ -182,6 +187,7 @@ def plot_Locations(env, force):
                             y.append(F.company[C].platoon[P].section[S].unit.member[M].location[1])
         plt.scatter(x, y, c=c[a], marker='.')
         plt.scatter(F.hq.member.location[0], F.hq.member.location[1], c=c[a], marker='x')
+        plt.scatter(F.objective.ctr[0], F.objective.ctr[1], c=c[a])
         a += 1
     plt.xlabel('X')
     plt.ylabel('Y')
@@ -267,7 +273,181 @@ def plot_Position_History(force):
     plt.ylabel('Y')
     plt.title('Position History')
 
-test = Optimise('GLOBAL', 3, 2)
+def plot_Zones(force, env):
+    for F in force:
+        X, Y = np.meshgrid(np.arange(0, env.nX / 10), np.arange(0, env.nY / 10))
+        Z = F.assignment
+        plt.figure()
+        plt.contourf(X, Y, Z)
+        plt.xlabel('X')
+        plt.ylabel('Y')
+        plt.title('Sector Assignment')
+        plt.show()
+
+def plot_PlatoonCOA(force, env):
+    X, Y = np.meshgrid(np.arange(0, env.nX), np.arange(0, env.nY))
+    Z = env.getTerrainCellElevations()
+    c = ['r', 'b']
+    a = 0
+    for F in force:
+        plt.figure()
+        plt.contourf(X, Y, Z)
+        for C in F.company:
+            for i in C.assignment:
+                path = i[0]
+                x_loc = []
+                y_loc = []
+                for s in path:
+                    # Translate number to sector location
+                    x_loc.append(C.sector_loc[s][0])
+                    y_loc.append(C.sector_loc[s][1])
+                plt.plot(x_loc, y_loc, c=c[a])
+        plt.xlabel('X')
+        plt.ylabel('Y')
+        plt.title('Platoon COAs')
+        plt.show()
+        a += 1
+
+def plot_SectionCOA(force, env):
+    X, Y = np.meshgrid(np.arange(0, env.nX), np.arange(0, env.nY))
+    Z = env.getTerrainCellElevations()
+    c = ['r', 'b']
+    a = 0
+    for F in force:
+        plt.figure()
+        plt.contourf(X, Y, Z)
+        for C in F.company:
+            for P in C.platoon:
+                for i in P.assignment:
+                    path = i[0]
+                    x_loc = []
+                    y_loc = []
+                    for s in path:
+                        x_loc.append(P.sector_loc[s][0])
+                        y_loc.append(P.sector_loc[s][1])
+                    plt.plot(x_loc, y_loc, c=c[a])
+        plt.xlabel('X')
+        plt.ylabel('Y')
+        plt.title('Section COAs')
+        plt.show()
+        a += 1
+
+def run_Simulation():
+    pass
+
+#test = Optimise('LOCAL', 3, 2)
+
+#env = generate_Environment()
+#scene = scenario.RandomScenario([env.nX, env.nY])
+
+cwCover = 1.0
+cwConceal = 1.0
+cwVis = 1.0
+cwEnemyFOBProx = 1.0
+cwMissObjProx = 1.0
+pwFriendlyFOBProx = 1.0
+pwEnemyFOBProx = 1.0
+pwMissObjProx = 1.0
+company_parameters = [1.0, 1.0, 1.0, [40.0]]
+parameters = [cwCover, cwConceal, cwVis, cwEnemyFOBProx, cwMissObjProx, pwFriendlyFOBProx, pwEnemyFOBProx, pwMissObjProx, company_parameters]
+
+force = []                                                 # Initialise commanders
+force.append(commander.TopLevelCommander(0, parameters, scene.adversary_objective))
+force.append(commander.TopLevelCommander(1, parameters, scene.friendly_objective))
+force[0].assignAssets(scene.adversary_assets)
+force[0].assignAssetLocations(scene.adversary_asset_locations, scene.adversary_fob_location)
+force[1].assignAssets(scene.friendly_assets)
+force[1].assignAssetLocations(scene.friendly_asset_locations, scene.friendly_fob_location)
+plot_Locations(env, force)                            # Plot asset locations
+
+for F in force:
+    F.assignZones(env, force[F.enemy_forceID].hq.member.location)
+plot_Zones(force, env)
+
+for F in force:
+    for C in F.company:
+        C.assignCOAPath(F.assignment, F.ctr, F.cost, F.priority, F.hq.member.location, F.objective.ctr, F.sector)
+plot_PlatoonCOA(force, env)
+
+for F in force:
+    for C in F.company:
+        for P in C.platoon:
+            P.assignCOAPath(C.assignment, C.AO, C.sector_loc)
+plot_SectionCOA(force, env)
+            
+for F in force:
+    for C in F.company:
+        for P in C.platoon:
+            for S in P.section:
+                S.assignPath(P.assignment, P.AO, P.sector_loc)
+                
+def timestep():
+    # Detection
+    for F in force:
+        F.detect(env, force[F.enemy_forceID])
+    # Event creation
+    event_queue = []
+    for F in force:
+        [forceID, companyID, platoonID, sectionID, manID, eventType, eventData] = F.createEvents(env, force[F.enemy_forceID])
+        for a in np.arange(0, len(forceID)):
+            for b in np.arange(0, len(companyID[a])):
+                for c in np.arange(0, len(platoonID[a][b])):
+                    for d in np.arange(0, len(sectionID[a][b][c])):
+                        if F.company[companyID[a][b]].platoon[platoonID[a][b][c]].section[sectionID[a][b][c][d]].unit.member[manID[a][b][c][d]].morale < 0.1:
+                            source = [forceID[a], companyID[a][b], platoonID[a][b][c], sectionID[a][b][c][d], manID[a][b][c][d]]
+                            speed = F.company[companyID[a][b]].platoon[platoonID[a][b][c]].section[sectionID[a][b][c][d]].unit.member[manID[a][b][c][d]].max_speed
+                            event_queue.append(event.LowMoraleRetreat(source, speed))
+                        else:
+                            if eventType[a][b][c][d] == 'MOVE':
+                                source = [forceID[a], companyID[a][b], platoonID[a][b][c], sectionID[a][b][c][d], manID[a][b][c][d]]
+                                event_queue.append(event.MovementEvent(source, eventData[a][b][c][d]))
+                            if eventType[a][b][c][d] == 'FIRE':
+                                source = [forceID[a], companyID[a][b], platoonID[a][b][c], sectionID[a][b][c][d], manID[a][b][c][d]]
+                                target = eventData[a][b][c][d][0]
+                                event_queue.append(event.FireEvent(source, target, eventData[a][b][c][d][1], eventData[a][b][c][d][2]))
+    # Event effect calculation
+    for E in event_queue:
+        if E.type == 'MOVE':
+            pass
+        elif E.type == 'FIRE':
+            E.calculate()
+    # Event result application
+    for E in event_queue:
+        if E.type == 'MOVE':
+            E.apply(force)
+        elif E.type == 'FIRE':
+            E.apply(force)
+    # Find number of surviving assets
+    count = []
+    for F in force:
+        count.append(F.countActive())
+    print('Surviving Assets: %s' % count)
+    # Record the state of each force
+    for F in force:
+        F.record(env)
+        
+def end_simulation():
+    for F in force:
+        F.end_simulation()
+
+def record_positions():
+    pass
+
+for t in np.arange(1, 101):                                      # Step through time
+    print('Timestep: %s' % t)
+    timestep()                                             # Perform timestep operations
+    if np.mod(t, 25) == 0:
+        plot_Locations(env, force)
+        plot_Detected(env, force)
+end_simulation()
+# Record
+record_positions()
+# Output results
+plot_Attrition_Rates(force)
+plot_Number_Active(force)
+plot_Visible_Area(force)
+plot_Number_Detected(force)
+plot_Position_History(force)
 
 # Create graph of enemy assets
 #E = nx.DiGraph()
