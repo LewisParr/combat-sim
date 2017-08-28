@@ -61,10 +61,11 @@ class Infantry(fInfantry):
         self.order = None
     
     def setLocation(self, location):
-#        [x, y] = location
+        x = location[0]
+        y = location[1]
         for M in self.member:
 #            M.setLocation([x + np.random.random(), y + np.random.random()]) # POSSIBLE TO START OUTSIDE ENVIRONMENT
-            M.setLocation(location)
+            M.setLocation([x, y])
     
     def setOrder(self, order):
         self.order = order
