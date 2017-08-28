@@ -14,11 +14,9 @@ class Objective(object):
         identifyThreats will return regions of the environment from which the
         given region can receive fire and/or be detected.
         """
-        x_ctr = (self.NW[0] + self.SE[0]) / 2
-        y_ctr = (self.NW[1] + self.SE[1]) / 2
         # Find visibility cell
-        cell_x = int(np.floor(x_ctr / env.visibility_cell_width))
-        cell_y = int(np.floor(y_ctr / env.visibility_cell_width))
+        cell_x = int(np.floor(self.ctr[0] / env.visibility_cell_width))
+        cell_y = int(np.floor(self.ctr[1] / env.visibility_cell_width))
         # Fetch the visibility map
         v_map = np.asarray(env.visibility_cell[cell_x][cell_y].v_map)
         # Set the visibility probability cutoff
@@ -46,6 +44,7 @@ class HoldArea(Objective):
         self.type = "HOLD AREA"
         self.NW = NW
         self.SE = SE
+        self.ctr = [(self.NW[0] + self.SE[0]) / 2, (self.NW[1] + self.SE[1]) / 2]
 
 class TakeArea(Objective):
     """
@@ -60,15 +59,11 @@ class TakeArea(Objective):
         self.type = "TAKE AREA"
         self.NW = NW
         self.SE = SE
+        self.ctr = [(self.NW[0] + self.SE[0]) / 2, (self.NW[1] + self.SE[1]) / 2]
 
 class ThreatArea(Objective):
-    """
-    ...
-    """
     def __init__(self, NW, SE):
-        """
-        ...
-        """
         self.type = "THREAT AREA"
         self.NW = NW
         self.SE = SE
+        self.ctr = [(self.NW[0] + self.SE[0]) / 2, (self.NW[1] + self.SE[1]) / 2]
