@@ -32,8 +32,10 @@ class InfantryAsset(object):
                                 # Random sample test for detection
                                 random_sample = np.random.uniform()
                                 if random_sample < raw_detection_prob:
-                                    cell_x = int(np.around(M.location[0]))
-                                    cell_y = int(np.around(M.location[1]))
+                                    cell_x = int(np.floor(M.location[0]))
+                                    cell_y = int(np.floor(M.location[1]))
+#                                    cell_x = int(np.around(M.location[0]))
+#                                    cell_y = int(np.around(M.location[1]))
                                     concealment = env.terrain_cell[cell_x][cell_y].concealment
                                     random_sample = np.random.uniform()
                                     if random_sample < concealment:
@@ -122,10 +124,10 @@ class Rifleman(InfantryAsset):
     Rifleman represents an infantryman equipped primarily with small arms
     rifle variants.
     """
-    def __init__(self, riflemanID):
+    def __init__(self, riflemanID, speed):
         self.manID = riflemanID
-        self.max_speed = 2.5
-        self.effective_range = 50
+        self.max_speed = np.random.lognormal(mean=speed[0], sigma=speed[1])
+        self.effective_range = 60
         self.phit = 0.5
         self.status = 0
         self.fortification = 0
@@ -138,10 +140,10 @@ class AutomaticRifleman(InfantryAsset):
     AutomaticRifleman represents an infantryman equipped primarily with small
     arms light machine gun or light support weapon variants.
     """
-    def __init__(self, autoriflemanID):
+    def __init__(self, autoriflemanID, speed):
         self.manID = autoriflemanID
-        self.max_speed = 2.5
-        self.effective_range = 50
+        self.max_speed = np.random.lognormal(mean=speed[0], sigma=speed[1])
+        self.effective_range = 60
         self.phit = 0.5
         self.status = 0
         self.fortification = 0
@@ -154,9 +156,9 @@ class Marksman(InfantryAsset):
     Marksman represents an infantryman equipped primarily with small arms
     marksman rifle variants.
     """
-    def __init__(self, marksmanID):
+    def __init__(self, marksmanID, speed):
         self.manID = marksmanID
-        self.max_speed = 2.5
+        self.max_speed = np.random.lognormal(mean=speed[0], sigma=speed[1])
         self.effective_range = 75
         self.phit = 0.5
         self.status = 0

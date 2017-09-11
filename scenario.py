@@ -13,7 +13,7 @@ class Scenario(object):
     pass
 
 class TestScenario(Scenario):
-    def __init__(self):
+    def __init__(self, speed):
         self.adversary_objective = objective.HoldArea([150, 200], [200, 150])
         self.friendly_objective = objective.TakeArea([150, 200], [200, 150])
         self.adversary_fob_location = [225, 225]
@@ -22,9 +22,11 @@ class TestScenario(Scenario):
         self.friendly_assets = [[2, 2, 2], [2, 2, 2]]
         self.adversary_asset_locations = [[[[125, 210], [130, 230]], [[130, 200], [125, 205]], [[130, 200], [140, 200]]], [[[150, 190], [155, 175]], [[150, 175], [160, 200]], [[170, 180], [180, 180]]]]
         self.friendly_asset_locations = [[[[25, 25], [30, 25]], [[35, 25], [40, 25]], [[45, 25], [50, 25]]], [[[55, 25], [60, 25]], [[65, 25], [70, 25]], [[75, 25], [80, 25]]]]
+        self.adversary_speed = speed[0]
+        self.friendly_speed = speed[1]
 
 class RandomScenario(Scenario):
-    def __init__(self, size):
+    def __init__(self, size, speed):
         objective_ctr = [np.random.uniform(size[0] / 3, size[0] * 2 / 3), np.random.uniform(size[1] / 3, size[1] * 2 / 3)]
         random_sample = np.random.uniform(0.0, 1.0)
         if random_sample < 0.5:
@@ -33,6 +35,7 @@ class RandomScenario(Scenario):
         else:
             self.adversary_objective = objective.TakeArea([objective_ctr[0] - 25, objective_ctr[1] + 25], [objective_ctr[0] + 25, objective_ctr[1] - 25])
             self.friendly_objective = objective.HoldArea([objective_ctr[0] - 25, objective_ctr[1] + 25], [objective_ctr[0] + 25, objective_ctr[1] - 25])
+        self.objective_ctr = objective_ctr
         self.adversary_fob_location = [None, None]
         for i in np.arange(0, 2):
             coord = np.random.uniform(0, size[i])
@@ -88,6 +91,8 @@ class RandomScenario(Scenario):
                         section_loc = [np.random.normal(loc=platoon_ctr[0], scale=5), np.random.normal(loc=platoon_ctr[1], scale=5)]
                         valid = self.checkWithinEnvironment(section_loc, size)
                     self.friendly_asset_locations[a][b][c] = section_loc
+        self.adversary_speed = speed[0]
+        self.friendly_speed = speed[1]
     
     def checkCoord(self, coord, dim, size, inside):
         if inside == False:

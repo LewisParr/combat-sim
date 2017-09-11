@@ -14,14 +14,17 @@ class PlatoonCommander(object):
     platoon and communicates information to and from superior and inferior
     commanders.
     """
-    def __init__(self, platoonID, assets, parameters):
+    def __init__(self, platoonID, assets, parameters, speed):
         # parameters: 0 - dist_from_path
+        #             1 - swHold
         self.platoonID = platoonID
         self.dist_from_path = parameters[0]
+        self.swHold = parameters[1]
+        self.stMorale = parameters[2]
         nSection = assets
         self.section = []
         for S in np.arange(0, nSection):
-            self.section.append(section.SectionCommander(S))
+            self.section.append(section.SectionCommander(S, self.swHold, self.stMorale, speed))
         self.assigned_objective = [None] * nSection
         self.order = None
         self.order_history = []
@@ -105,12 +108,13 @@ class PlatoonCommander(object):
                     node.append(n)
             if in_range == False:
                 remove.append(n)
-                
-        plt.figure()
-        plt.scatter(all_x, all_y)
-        plt.scatter(saved_x, saved_y)
-        plt.show()
-            
+#        plt.figure()
+#        plt.scatter(all_x, all_y)
+#        plt.scatter(saved_x, saved_y)
+#        plt.xlabel('X (Sector)')
+#        plt.ylabel('Y (Sector)')
+#        plt.title('AO Nodes')
+#        plt.show()
         AO.remove_nodes_from(remove)
         # Remove all edges from the graph that do not connect adjacent sectors
         remove = []
@@ -121,8 +125,8 @@ class PlatoonCommander(object):
             if dist > 15.0:
                 remove.append(e)
         AO.remove_edges_from(remove)
-        position_dict = dict(zip(node, location))
-        plot_Graph(AO, position_dict)
+#        position_dict = dict(zip(node, location))
+#        plot_Graph(AO, position_dict)
         # Use Dijkstra's algorithm variant to find best path
         [path, cost] = self.dijkstra_handler(AO, assigned)
         # Estimate the capability of each section
@@ -165,10 +169,17 @@ class PlatoonCommander(object):
                     if i != assigned[-1]:
                         graph.node[i]['Available'] = False
             [best_path, best_cost] = company.dijkstra(graph, assigned[0], assigned[-1])
-            path.append(best_path)
-            cost.append(best_cost)
-        print(path)
-        print(cost)
+            if best_cost == 999999.0:
+                if len(path) > 0:
+                    path.append(path[-1])
+                    cost.append(cost[-1])
+                else:
+                    print('No possible path.')
+                    path.append(best_path)
+                    cost.append(best_cost)                    
+            else:
+                path.append(best_path)
+                cost.append(best_cost)
         return [path, cost]
 
 def plot_Graph(graph, position_dict):

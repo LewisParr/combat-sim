@@ -44,19 +44,19 @@ class Infantry(fInfantry):
     """
     ...
     """
-    def __init__(self, nRifleman=4, nAutomaticRifleman=2, nMarksman=2):
+    def __init__(self, speed, nRifleman=4, nAutomaticRifleman=2, nMarksman=2):
         self.unitID = 2
         # Initialise assets
         self.member = []
         manID = 0
         for R in np.arange(0, nRifleman):
-            self.member.append(infantryasset.Rifleman(manID))
+            self.member.append(infantryasset.Rifleman(manID, speed))
             manID += 1
         for A in np.arange(0, nAutomaticRifleman):
-            self.member.append(infantryasset.AutomaticRifleman(manID))
+            self.member.append(infantryasset.AutomaticRifleman(manID, speed))
             manID += 1
         for M in np.arange(0, nMarksman):
-            self.member.append(infantryasset.Marksman(manID))
+            self.member.append(infantryasset.Marksman(manID, speed))
             manID += 1
         self.order = None
     

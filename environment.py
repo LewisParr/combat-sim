@@ -1,14 +1,10 @@
 # -*- coding: utf-8 -*-
 # environment.py
 
-import csv
 import numpy as np
 import matplotlib.pyplot as plt
 
 class Environment(object):
-    """
-    ...
-    """
     def __init__(self, nX, nY):
         self.nX = nX
         self.nY = nY
@@ -31,9 +27,6 @@ class Environment(object):
             self.visibility_cell.append(visibility_cell_row)
         
     def genTerrain(self, F):
-        """
-        ...
-        """
         # Generate terrain elevations
         x = np.arange(0, self.nX)
         y = np.arange(0, self.nY)
@@ -71,46 +64,41 @@ class Environment(object):
             Z.append(Z_row)
         return Z
     
+    def getTerrainCellCovers(self):
+        Z = []
+        for x in np.arange(0, self.nX):
+            Z_row = []
+            for y in np.arange(0, self.nY):
+                Z_row.append(self.terrain_cell[x][y].cover)
+            Z.append(Z_row)
+        return Z
+    
     def plotElevation(self):
         X, Y = np.meshgrid(np.arange(0, self.nX), np.arange(0, self.nY))
         Z = self.getTerrainCellElevations()
         plt.figure()
         plt.contourf(X, Y, Z)
-        plt.title('Elevation Contour Plot')
         plt.xlabel('X')
         plt.ylabel('Y')
         plt.title('Terrain Elevation')
         plt.colorbar()
         plt.show()
-
-    def saveElevationData(self):
-        with open('elevation.txt', 'w') as output_file:
-            wr = csv.writer(output_file)
-            for x in np.arange(0, self.nX):
-                for y in np.arange(0, self.nY):
-                    z = self.terrain_cell[x][y].Z
-                    #z = self.Z[a][b] OLD
-                    output = [x, y, z]
-                    wr.writerow(output)
-                    
-    def loadElevationData(self):
-        with open('elevation.txt', 'r') as input_file:
-            r = csv.reader(input_file)
-            for row in r:
-                if row:
-                    x = int(row[0])
-                    y = int(row[1])
-                    z = float(row[2])
-                    self.terrain_cell[x][y].setElevation(z)
-            x = np.arange(0, self.nX)
-            y = np.arange(0, self.nY)
-            self.X, self.Y = np.meshgrid(x, y)
+        
+    def plotCover(self):
+        X, Y = np.meshgrid(np.arange(0, self.nX), np.arange(0, self.nY))
+        Z = self.getTerrainCellCovers()
+        plt.figure()
+        plt.contourf(X, Y, Z)
+        plt.xlabel('X')
+        plt.ylabel('Y')
+        plt.title('Terrain Cover')
+        plt.colorbar()
+        plt.show()
             
     def buildVisibilityMaps(self):
         for x in np.arange(0, self.nX / self.visibility_cell_width):
-            print(x)
             for y in np.arange(0, self.nY / self.visibility_cell_width):
-                print(y)
+                print('Building visibility map for (%s, %s)...' % (x, y))
                 observer = [self.visibility_cell[int(x)][int(y)].x_ctr, self.visibility_cell[int(x)][int(y)].y_ctr]
                 [xx, yy, v_map] = self.buildVisibilityMap(observer)
                 self.visibility_cell[int(x)][int(y)].setMap(v_map)
@@ -139,18 +127,6 @@ class Environment(object):
                 else:
                     m = - np.tan(r - ((3 / 2) * np.pi))
                 c = obs[1] - (m * obs[0])
-#                # Plot the slice line
-#                plt.figure()
-#                plt.contourf(self.X, self.Y, self.Z)
-#                x = []
-#                y = []
-#                for a in np.linspace(0, self.nX):
-#                    if (m * a) + c >= 0:
-#                        if (m * a) + c < self.nY:
-#                            x.append(a)
-#                            y.append((m * a) + c)
-#                plt.plot(x, y, c='r')
-#                plt.show()
                 [slice_x, slice_y, slice_v] = self.calculateSliceVisibility(obs, m, c)
                 all_x = all_x + slice_x
                 all_y = all_y + slice_y
@@ -202,9 +178,12 @@ class Environment(object):
                 row_v_prob.append(grid_v_prob)
             v_prob.append(row_v_prob)
         xx, yy = np.meshgrid(x, y)
-        plt.figure()
-        plt.contourf(xx, yy, v_prob)
-        plt.show()
+#        plt.figure()
+#        plt.contourf(xx, yy, v_prob)
+#        plt.xlabel('X')
+#        plt.ylabel('Y')
+#        plt.title('Visibility Map')
+#        plt.show()
         return [xx, yy, v_prob]
             
     def calculateSliceVisibility(self, obs, m, c):
@@ -283,10 +262,10 @@ class Environment(object):
                             los_check = False
                     los.append(los_check)
             # Plot point visibility along slice
-    #        plt.figure()
-    #        plt.plot(dist, elev)
-    #        plt.scatter(dist[np.where(los)], elev[np.where(los)], c='g')
-    #        plt.show()
+#            plt.figure()
+#            plt.plot(dist, elev)
+#            plt.scatter(dist[np.where(los)], elev[np.where(los)], c='g')
+#            plt.show()
             # Convert distance values back to (x, y) values
             x = []
             y = []
@@ -303,47 +282,6 @@ class Environment(object):
             return [x, y, v]
         else:
             return [[], [], []]
-    
-    def saveVisibilityMaps(self):
-        with open('visibility.txt', 'w') as output_file:
-            wr = csv.writer(output_file)
-            for x in np.arange(0, self.nX / self.visibility_cell_width):
-                for y in np.arange(0, self.nY / self.visibility_cell_width):
-                    v_map = self.visibility_cell[int(x)][int(y)].v_map
-                    for a in np.arange(0, len(v_map)):
-                        for b in np.arange(0, len(v_map[a])):
-                            print(v_map[a][b])
-                            output = [x, y, a, b, v_map[a][b]]
-                            wr.writerow(output)
-                            
-    def loadVisibilityMaps(self):
-        with open('visibility.txt', 'r') as input_file:
-            r = csv.reader(input_file)
-            v_map = []
-            v_map_row = []
-            x_tracker = 0
-            y_tracker = 0
-            a_tracker = 0
-            b_tracker = 0
-            for row in r:
-                if row:
-                    b_tracker += 1
-                    v_prob = float(row[4])
-                    v_map_row.append(v_prob)
-                    if b_tracker == 12:
-                        v_map.append(v_map_row)
-                        v_map_row = []
-                        a_tracker += 1
-                        b_tracker = 0
-                        if a_tracker == 12:
-                            self.visibility_cell[x_tracker][y_tracker].setMap(v_map)
-                            v_map = []
-                            y_tracker += 1
-                            a_tracker = 0
-                            if y_tracker == len(self.visibility_cell[0]):
-                                y_tracker = 0
-                            if x_tracker == len(self.visibility_cell):
-                                x_tracker = 0 # NEEDS FIXING: NOT ALL V_MAPS ARE SAVED
 
 class Cell(object):
     """

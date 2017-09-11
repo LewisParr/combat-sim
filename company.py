@@ -12,7 +12,7 @@ class CompanyCommander(object):
     company and communicates information to and from superior and inferior 
     commanders.
     """
-    def __init__(self, companyID, assets, parameters):
+    def __init__(self, companyID, assets, parameters, speed):
         # [1.0, 1.0, 1.0, [30.0]]
         # parameters: 0 - ewDist
         #             1 - ewCover
@@ -22,11 +22,14 @@ class CompanyCommander(object):
         self.ewDist = parameters[0]
         self.ewCover = parameters[1]
         self.ewConceal = parameters[2]
-        self.platoon_parameters = parameters[3]
+        dist_from_path = parameters[3]
+        swHold = parameters[4]
+        stMorale = parameters[5]
+        self.platoon_parameters = [dist_from_path, swHold, stMorale]
         nPlatoon = len(assets)
         self.platoon = []
         for P in np.arange(0, nPlatoon):
-            self.platoon.append(platoon.PlatoonCommander(P, assets[P], self.platoon_parameters))
+            self.platoon.append(platoon.PlatoonCommander(P, assets[P], self.platoon_parameters, speed))
         self.assigned_objective = [None] * nPlatoon
         self.order = None
         self.order_history = []

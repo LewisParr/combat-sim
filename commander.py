@@ -2,8 +2,6 @@
 # commander.py
 
 import unit
-import order
-import objective
 import company
 import sector
 import zone
@@ -43,11 +41,12 @@ class TopLevelCommander(object):
         self.pwFriendlyFOBProx = parameters[5]
         self.pwEnemyFOBProx = parameters[6]
         self.pwMissObjProx = parameters[7]
-        self.company_parameters = parameters[8]
+        self.company_parameters = [parameters[8], parameters[9], parameters[10], parameters[11], parameters[12], parameters[13]]
         # Initialise lists
         self.active_assets = []
         self.visible_area = []
         self.detected_enemy_assets = []
+        self.mo_score = []
     
     def assignZones(self, env, enemy_fob_loc):
         # Set wUnitID by parameter later
@@ -205,7 +204,7 @@ class TopLevelCommander(object):
                     if np.absolute(c[0] - x) < tol:
                         if np.absolute(c[1] - y) < tol:
                             found = True
-                if found == False:
+                if found == False: # SHOULD THIS BE TRUE (OR NOT EQUAL TO)?
                     unique_detected_location.append(detected_location[a][b])
         self.detected_location = unique_detected_location
     
@@ -217,12 +216,12 @@ class TopLevelCommander(object):
                 for S in P.section:
                     S.order_history.append([S.order, S.order_duration])
         
-    def assignAssets(self, assets):
+    def assignAssets(self, assets, speed):
         self.hq = unit.Headquarters()
         nCompany = len(assets)
         self.company = []
         for C in np.arange(0, nCompany):
-            self.company.append(company.CompanyCommander(C, assets[C], self.company_parameters))
+            self.company.append(company.CompanyCommander(C, assets[C], self.company_parameters, speed))
         self.assigned_objective = [None] * nCompany
     
     def assignAssetLocations(self, locations, fob_location):
@@ -260,12 +259,6 @@ class TopLevelCommander(object):
                             count += 1
         return count
     
-    def calculateAttritionRate(self):
-        attrition_rate = [0]
-        for i in np.arange(1, len(self.active_assets)):
-            attrition_rate.append((self.active_assets[i] - self.active_assets[i-1]) / 1) # CHANGE 1 TO LENGTH OF A TIMESTEP
-        return attrition_rate
-    
     def measureVisibleArea(self, env):
         # Collate the areas visible by each asset
         v_maps = []
@@ -289,6 +282,16 @@ class TopLevelCommander(object):
     def countDetected(self):
         return len(self.detected_location)
     
+    def scoreMO(self):
+        inverse_dist = []
+        for C in self.company:
+            for P in C.platoon:
+                for S in P.section:
+                    for M in S.unit.member:
+                        if M.status != 2:
+                            inverse_dist.append(1 / np.sqrt((M.location[0] - self.objective.ctr[0])**2 + (M.location[1] - self.objective.ctr[1])**2))
+        return np.sum(inverse_dist)
+    
     def record(self, env):
         # Save the number of active assets
         self.active_assets.append(self.countActive())
@@ -296,6 +299,8 @@ class TopLevelCommander(object):
         self.visible_area.append(self.measureVisibleArea(env))
         # Save the number of detected enemy assets
         self.detected_enemy_assets.append(self.countDetected())
+        # Save the mission objective score
+        self.mo_score.append(self.scoreMO())
     
     def record_positions(self):
         for C in self.company:
